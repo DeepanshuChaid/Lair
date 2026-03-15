@@ -48,14 +48,14 @@ func handleWS (c *gin.Context) {
     }
 
     log.Println("Message received: ", msg)
+
+    // Send a message to the client
+    conn.WriteJSON("message revieved yipeee!")
   }
 
   
   log.Println("conn", conn)
   log.Println("CLIENT CONNECTED")
-
-  // Send a message to the client
-  conn.WriteJSON("message revieved yipeee!")
 }
 
 
