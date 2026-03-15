@@ -22,9 +22,13 @@ var upgrader = websocket.Upgrader{
   },
 }
 
+var clients = make(map[*websocket.Conn]bool)
+
 func handleWS (c *gin.Context) {
   // Upgrade the connection to a websocket connection
   conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+
+  clients[conn] = true
   
   if err != nil {
     c.JSON(http.StatusBadRequest, gin.H{
@@ -45,18 +49,18 @@ func handleWS (c *gin.Context) {
     err := conn.ReadJSON(&msg)
     if err != nil {
       log.Println("Error reading message: ", err)
+      delete(clients, conn)
       break
     }
 
     fmt.Println("Message received: ", msg)
 
-    // Send a message to the client
-    conn.WriteJSON("message revieved yipeee!")
+    for client := range clients {
+      client.WriteJSON(msg)
+    }
+    
   }
-
   
-  log.Println("conn", conn)
-  log.Println("CLIENT CONNECTED")
 }
 
 
@@ -65,6 +69,11 @@ func main(){
   if err != nil {
     log.Fatal("Error loading .env file")
   }
+
+  // newMap := map[string]interface{
+  //   "key": "value",
+  //   "key2": 2,
+  // }
   
   router := gin.Default()
 
