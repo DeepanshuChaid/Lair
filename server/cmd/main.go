@@ -1,14 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"net/http"
 	"os"
-  "net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-  "github.com/gorilla/websocket"
+	"github.com/gorilla/websocket"
 )
 
 // THIS CONVERTS THE HTTP CONNECTION TO A WEBSOCKET CONNECTION
@@ -47,7 +48,7 @@ func handleWS (c *gin.Context) {
       break
     }
 
-    log.Println("Message received: ", msg)
+    fmt.Println("Message received: ", msg)
 
     // Send a message to the client
     conn.WriteJSON("message revieved yipeee!")

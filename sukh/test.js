@@ -6,6 +6,10 @@ ws.on("open", () => {
   console.log("connected");
 
   ws.send(JSON.stringify("hello server"));
+
+  ws.send(JSON.stringify("hello server again"))
+
+  ws.send(JSON.stringify("hello server again"))
 });
 
 ws.on("message", (data) => {
