@@ -1,71 +1,80 @@
-// package main
+package main
 
-// import "fmt"
+import "fmt"
 
-// // basically the lists of users
-// type client struct {
-//   // hub is a pointer to the hub basically the hub the client is connected to
-// 	hub  *hub
+type hub struct {
+  // list of all the clients
+  clients map[*client]bool
 
-//   // send is a channel of byte arrays basically the messages that the client sends
-// 	send chan []byte
-// }
+  // client connects -> register chan
+  register chan *client
+  // client disconnects -> unregister chan
+  unregister chan *client
 
-// // chan are used for sending and revieveing data in goruntines
-// type hub struct {
-// 	// storing all of the clients bascially a list
-// 	clients map[*client]bool
+  // messages sent to all clients
+  broadcast chan []byte
+}
 
-//   // this is a channel of byte arrays basically the messages that the hub sends
-// 	broadcast chan []byte
-// }
+func newHub() *hub {
+  return &hub{
+    clients: make(map[*client]bool),
+    register: make(chan *client),
+    unregister: make(chan *client),
+    broadcast: make(chan []byte),
+  }
+}
 
-// // simply returns a hub
-// func newHub() *hub {
-// 	return &hub{
-// 		clients:   make(map[*client]bool),
-// 		broadcast: make(chan []byte),
-// 	}
-// }
+func (h *hub) run() {
+  for {
+    select {
+      case client := <-h.register:
+        h.clients[client] = true
+      case client := <-h.unregister:
+        // delete bascially removes the client from the map
+        delete(h.clients, client)
+        // close is really imp, if any gorountine is listening to the channel, it will not be stopped
+        close(client.send)
+        fmt.Println("Client disconnected")  
 
-// // this is a method of hub a infinite loop where it waits for the ALL THE sent messages and just prints it
-// func (h *hub) run() {
-// 	for {
+      case message := <-h.broadcast:
+        fmt.Println("broadcast message: ", string(message))
 
-//     // dont get confused by syntax this is just a way to recieve data from a channel
-// 		message := <-h.broadcast
-//     fmt.Println("Hub received:", string(message))
+      for client := range h.clients {
+        client.send <- message
+      }
+    }
+  }
+}
 
-//     // map the clint list and sent te message to each client
-// 		for client := range h.clients {
-// 			client.send <- message
-// 		}
+type client struct {
+  // refers to the hub that the client is connected to
+  hub *hub
 
-// 	}
-// }
+  // message received from the hub
+  send chan []byte
+}
 
-// func main() {
-// 	hub := newHub()
 
-// 	go hub.run()
+func main () {
+  h := newHub()
 
-//   client := client{
-//     hub: hub,
-//     send: make(chan []byte),
-//   }
+  go h.run()
 
-//   hub.clients[&client] = true
+  c := &client{
+    hub: h,
+    send: make(chan []byte),
+  }
+  
+  h.register <- c
 
-//   go func() {
-//     for msg := range client.send {
-//       fmt.Println("Client received:", string(msg))
-//     }
-//   }()
+  go func() {
+    for msg := range c.send {
+      fmt.Println("Client received:", string(msg))
+    }
+  }()
 
-// 	// SENDING DATA
-// 	hub.broadcast <- []byte("Hello from hub")
+  // this is same as client sending a message to the hub
+  h.broadcast <- []byte("Hello from hub")
 
-// 	// hub.broadcast <- []byte("Hello from hub again")
-
-// 	// hub.broadcast <- []byte("HATE HATE HATE IF THE WORD HATE WAS ENGRAVED ON EACH CELL ON MY BODY IT WOULD BE EQUAL TO THE ONE BILLIONTH OF THE HATE I FEEL TOWARDS YOU AT THIS MICRO INSTANT HATE HAHAH HATEEE!")
-// }
+  select{}
+}
