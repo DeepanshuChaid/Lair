@@ -1,32 +1,20 @@
 package main
 
-type Hub struct {
-  Clients map[*Client]bool
+import "fmt"
 
-  Broadcast chan []byte
-
-  register chan *Client
-
-  unregister chan *Client
+type hub struct {
+  broadcast chan []byte
 }
 
-func NewHub() *Hub {
-  return &Hub{
-    Clients: make(map[*Client]bool),
-    Broadcast: make(chan []byte),
-    register: make(chan *Client),
-    unregister: make(chan *Client),
+func newHub() *hub {
+  return &hub{
+    broadcast: make(chan []byte),
   }
 }
 
-func (h *Hub) run() {
+func (h *hub) run () {
   for {
-    select {
-      case client := <-h.register:
-        h.Clients[client] = true
-
-      case client := <-h.unregister:
-        delete(h.Clients, c)
-    }
+    message := <-h.broadcast
+    fmt.Println("HUB revieved", string(message))
   }
 }
