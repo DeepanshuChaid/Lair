@@ -41,10 +41,6 @@ func main () {
   authRoutes.GET("/google", authController.GoogleLogin())
   authRoutes.GET("/google/callback", authController.GoogleCallback())
   
-  
-  authRoutes.POST("/login", func(ctx *gin.Context) {
-    
-  })
 
   // Protected routes
   protectedRoutes := router.Group("/api")

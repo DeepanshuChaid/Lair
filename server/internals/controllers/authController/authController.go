@@ -11,162 +11,192 @@ import (
 	"github.com/DeepanshuChaid/Lair/internals/oauth"
 	"github.com/DeepanshuChaid/Lair/internals/utils/authUtils"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
+var validate = validator.New()
+
 func Register() gin.HandlerFunc {
-  return func(c *gin.Context) {
-    ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-    defer cancel()
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
 
-    var body struct {
-      name string `json:"name"`
-      email string `json:"email"`
-      password string `json:"password"`
-    }
+		var body struct {
+			Id       string `json:"id"`
+			Name     string `json:"name" validate:"required,min=2"`
+			Email    string `json:"email" validate:"required,email"`
+			Password string `json:"password" validate:"required,min=6"`
+		}
 
-    if err := c.ShouldBindJSON(&body); err != nil {
-      c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-      return
-    }
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
 
-    // 🔐 hash password
-    hashedPassword, err := authutils.HashPassword(body.password)
+		err := validate.Struct(body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "detail": err.Error()})
+			return
+		}
+
+		// 🔐 hash password
+		hashedPassword, err := authutils.HashPassword(body.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			return
+		}
+
+		err = database.Pool.QueryRow(ctx, "INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id", body.Name, body.Email, hashedPassword).Scan(&body.Id)
+
     if err != nil {
-      c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+      c.JSON(500, gin.H{"error": "Database error", "detail": err.Error(),})
       return
     }
 
-    rows, err := database.Pool.Query(ctx, "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", body.name, body.email, hashedPassword)
-    rows.Close()
-
-    if err != nil {
-      c.JSON(500, gin.H{"error": "User already exists or DB error"})
-      return
-    }
-
-    c.JSON(http.StatusOk, gin.H{
+    c.JSON(200, gin.H{
       "message": "User created successfully",
-      "user": body
+      "user": gin.H{
+        "id": body.Id,
+        "name": body.Name,
+        "email": body.Email,
+      },
     })
-  }
+	}
 }
 
 func Login() gin.HandlerFunc {
-  return func(c *gin.Context) {
-    var body struct {
-      email string `json:"email"`
-      password string `json:"password"`
-    }
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
 
-    if err := c.ShouldBindJSON(&body); err != nil {
-      c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-      return
-    }
+		var body struct {
+			Email    string `json:"email" validate:"required,email"`
+			Password string `json:"password" validate:"required,min=6"`
+		}
 
-    // 🔐 check password
-    err := authutils.CheckPassword(body.password, body.password)
-    if err != nil {
-      c.JSON(http.StatusUnauthorized, gin.H{"error": "Wrong password, Try another password"})
-      return
-    }
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
 
-    var User userModel.User
+		err := validate.Struct(body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "detail": err.Error()})
+			return
+		}
 
-    err = database.Pool.QueryRow(ctx, "SELECT id, name, email, profile_picture FROM users WHERE email = $1", body.email).Scan(&User.Id, &User.Name, &User.Email, &User.Profile_picture)
-    if err != nil {
-      c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
-      return
-    }
+		var User struct {
+			Id              string `json:"id"`
+			Name            string `json:"name"`
+			Email           string `json:"email"`
+			Password        string `json:"password"`
+			Profile_picture string `json:"profile_picture"`
+		}
 
-    // 🔐 generate JWT
-    tokenString, err := authutils.GenerateJWT(User.Id)
-    if err != nil {
-      c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-      return
-    }
+		err = database.Pool.QueryRow(ctx, "SELECT id, name, password,  email, profile_picture FROM users WHERE email = $1", body.Email).Scan(&User.Id, &User.Name, &User.Password, &User.Email, &User.Profile_picture)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+			return
+		}
 
-    // 🍪 set cookie
-    c.SetCookie(
-      "auth_token",
-      token,
-      3600*24,
-      "/",
-      "",
-      false,
-      true,
-    )
+		// 🔐 check password
+		err = authutils.CheckPassword(User.Password, body.Password)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Wrong password, Try another password"})
+			return
+		}
 
-    c.JSON(http.StatusOk, gin.H{
+		// 🔐 generate JWT
+		token, err := authutils.GenerateJWT(User.Id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
+
+		// 🍪 set cookie
+		c.SetCookie(
+			"token",
+			token,
+			3600*24,
+			"/",
+			"",
+			false,
+			true,
+		)
+
+    c.JSON(200, gin.H{
       "message": "Login successful",
-      "user": User,
+      "user": gin.H{
+        "id": User.Id,
+        "name": User.Name,
+        "email": User.Email,
+        "profile_picture": User.Profile_picture,
+      },
     })
-  }
+	}
 }
-
-
 
 // ========== GOOGLE OAUTH =========== //
 func GoogleLogin() gin.HandlerFunc {
-  return func(c *gin.Context) {
-    _, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-    defer cancel()
-    
-    url := oauth.GoogleOAuthConfig.AuthCodeURL("randomstate")
+	return func(c *gin.Context) {
+		_, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
 
-    c.Redirect(302, url)
-  }
+		url := oauth.GoogleOAuthConfig.AuthCodeURL("randomstate")
+
+		c.Redirect(302, url)
+	}
 }
 
 func GoogleCallback() gin.HandlerFunc {
-  return func(c *gin.Context) {
-      _, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-      defer cancel()
+	return func(c *gin.Context) {
+		_, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
 
-    
-      code := c.Query("code")
+		code := c.Query("code")
 
-      token, err := oauth.GoogleOAuthConfig.Exchange(context.Background(), code)
-      if err != nil {
-        c.JSON(500, gin.H{"error": "OAuth failed"})
-        return
-      }
+		token, err := oauth.GoogleOAuthConfig.Exchange(context.Background(), code)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "OAuth failed"})
+			return
+		}
 
-      client := oauth.GoogleOAuthConfig.Client(context.Background(), token)
+		client := oauth.GoogleOAuthConfig.Client(context.Background(), token)
 
-      resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-      if err != nil {
-        c.JSON(500, gin.H{"error": "Failed to get user info"})
-        return
-      }
+		resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to get user info"})
+			return
+		}
 
-      defer resp.Body.Close()
+		defer resp.Body.Close()
 
-      // var userInfo map[string]interface{}
-      // json.NewDecoder(resp.Body).Decode(&userInfo)
+		// var userInfo map[string]interface{}
+		// json.NewDecoder(resp.Body).Decode(&userInfo)
 
-      // email := userInfo["email"].(string)
-      // name := userInfo["name"].(string)
-      // picture := userInfo["picture"].(string)
+		// email := userInfo["email"].(string)
+		// name := userInfo["name"].(string)
+		// picture := userInfo["picture"].(string)
 
-      // 🔥 create or find user in DB
-      // user := findOrCreateUser(email, name, picture)
+		// 🔥 create or find user in DB
+		// user := findOrCreateUser(email, name, picture)
 
-      // // 🔐 generate JWT
-      // tokenString := generateJWT(user.ID)
+		// // 🔐 generate JWT
+		// tokenString := generateJWT(user.ID)
 
-      // 🍪 set cookie
-      // c.SetCookie(
-      //   "auth_token",
-      //   tokenString,
-      //   3600*24,
-      //   "/",
-      //   "",
-      //   true,  // secure (true in prod)
-      //   true,  // httpOnly
-      // )
+		// 🍪 set cookie
+		// c.SetCookie(
+		//   "auth_token",
+		//   tokenString,
+		//   3600*24,
+		//   "/",
+		//   "",
+		//   true,  // secure (true in prod)
+		//   true,  // httpOnly
+		// )
 
-      frontendUrl := os.Getenv("FRONTEND_URL")  
+		frontendUrl := os.Getenv("FRONTEND_URL")
 
-      c.Redirect(302, frontendUrl)
-    }
+		c.Redirect(302, frontendUrl)
+	}
 }
