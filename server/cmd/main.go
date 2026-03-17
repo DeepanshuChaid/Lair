@@ -1,44 +1,56 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
+	"log"
+	"os"
 
-	"github.com/DeepanshuChaid/Lair/websocket/client"
-	"github.com/DeepanshuChaid/Lair/websocket/hub"
+	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
+
+  "github.com/DeepanshuChaid/Lair/internals/controllers/authController"
+
+	"github.com/joho/godotenv"
 )
 
-var upgrader = websocket.Upgrader{
-  CheckOrigin: func(r *http.Request) bool {
-    return true
-  },
-}
-
-func serveWS(h *hub.Hub, c *gin.Context) {
-  roomName := c.Param("roomName")
-
-  room := h.CreateRoom(roomName)
-
-  conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-  
-  if err != nil {
-    c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-    return
-  }
-
-  client := &client.Client{
-    Conn: conn,
-    Room: room,
-    Send: make(chan []byte),
-  }
-
-  room.Register <- client
-
-  go client.ReadPump()
-}
-
 func main () {
-  fmt.Println("hello world")
+  err := godotenv.Load()
+  if err != nil {
+    log.Fatal("Error loading .env file")
+  }
+
+  database.Connect()
+
+  PORT := os.Getenv("PORT")
+
+  router := gin.Default()
+
+  router.GET("/", func(c *gin.Context) {
+    c.JSON(200, gin.H{
+      "message": "Hi USER",
+    })
+  })
+
+  // Public routes
+  authRoutes := router.Group("/auth")
+
+  authRoutes.POST("/register", authController.Register())
+  authRoutes.POST("/login", authController.Login())
+
+  
+  // google oauth
+  authRoutes.GET("/google", authController.GoogleLogin())
+  authRoutes.GET("/google/callback", authController.GoogleCallback())
+  
+  
+  authRoutes.POST("/login", func(ctx *gin.Context) {
+    
+  })
+
+  // Protected routes
+  protectedRoutes := router.Group("/api")
+  protectedRoutes.GET("/user", func(ctx *gin.Context) {
+    
+  })
+
+  router.Run(":" + PORT)
 }
