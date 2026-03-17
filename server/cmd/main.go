@@ -5,9 +5,10 @@ import (
 	"os"
 
 	"github.com/DeepanshuChaid/Lair/internals/database"
+ "github.com/DeepanshuChaid/Lair/internals/middlewares/authMiddleware"
 	"github.com/gin-gonic/gin"
 
-  "github.com/DeepanshuChaid/Lair/internals/controllers/authController"
+	"github.com/DeepanshuChaid/Lair/internals/controllers/authController"
 
 	"github.com/joho/godotenv"
 )
@@ -44,6 +45,7 @@ func main () {
 
   // Protected routes
   protectedRoutes := router.Group("/api")
+  protectedRoutes.Use(authMiddleware.AuthMiddleware())
   protectedRoutes.GET("/user", func(ctx *gin.Context) {
     
   })

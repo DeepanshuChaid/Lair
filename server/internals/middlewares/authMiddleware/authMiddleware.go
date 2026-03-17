@@ -1,4 +1,4 @@
-package middleware
+package authMiddleware
 
 import (
   "net/http"
@@ -21,13 +21,16 @@ func AuthMiddleware() gin.HandlerFunc {
     // 🔐 verify JWT
     claims, err := authutils.VerifyJWT(token)
     if err != nil {
-      c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+      c.JSON(401, gin.H{"error": "Invalid token"})
       c.Abort()
       return
     }
 
-    // 🧠 attach user to context
-    c.Set("userId", claims.UserID)
+    // 👇 extract user id
+    userId := claims["user_id"].(string)
+
+    // attach to context
+    c.Set("userId", userId)
 
     c.Next()
   }
