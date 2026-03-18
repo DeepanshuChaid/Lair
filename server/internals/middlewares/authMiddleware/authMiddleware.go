@@ -19,7 +19,7 @@ func AuthMiddleware() gin.HandlerFunc {
     }
 
     // 🔐 verify JWT
-    claims, err := authutils.VerifyJWT(token)
+    claims, err := authUtils.VerifyJWT(token)
     if err != nil {
       c.JSON(401, gin.H{"error": "Invalid token"})
       c.Abort()

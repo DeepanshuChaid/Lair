@@ -2,6 +2,7 @@ package authController
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 
@@ -40,7 +41,7 @@ func Register() gin.HandlerFunc {
 		}
 
 		// 🔐 hash password
-		hashedPassword, err := authutils.HashPassword(body.Password)
+		hashedPassword, err := authUtils.HashPassword(body.Password)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 			return
@@ -101,14 +102,14 @@ func Login() gin.HandlerFunc {
 		}
 
 		// 🔐 check password
-		err = authutils.CheckPassword(User.Password, body.Password)
+		err = authUtils.CheckPassword(User.Password, body.Password)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Wrong password, Try another password"})
 			return
 		}
 
 		// 🔐 generate JWT
-		token, err := authutils.GenerateJWT(User.Id)
+		token, err := authUtils.GenerateJWT(User.Id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 			return
@@ -151,7 +152,7 @@ func GoogleLogin() gin.HandlerFunc {
 
 func GoogleCallback() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		_, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
 		code := c.Query("code")
@@ -172,29 +173,39 @@ func GoogleCallback() gin.HandlerFunc {
 
 		defer resp.Body.Close()
 
-		// var userInfo map[string]interface{}
-		// json.NewDecoder(resp.Body).Decode(&userInfo)
+		var userInfo map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&userInfo)
 
-		// email := userInfo["email"].(string)
-		// name := userInfo["name"].(string)
-		// picture := userInfo["picture"].(string)
+		email := userInfo["email"].(string)
+		name := userInfo["name"].(string)
+		picture := userInfo["picture"].(string)
+
+		var id string
 
 		// 🔥 create or find user in DB
-		// user := findOrCreateUser(email, name, picture)
+		err = database.Pool.QueryRow(ctx, "INSERT INTO client (name, email, profile_picture) VALUES ($1, $2, $3) RETURNING id", name, email, picture).Scan(&id)
+		if err != nil {
+			c.JSON(500, gin.H{"message": "database error", "detail": err.Error()})
+			return 
+		}
 
 		// // 🔐 generate JWT
-		// tokenString := generateJWT(user.ID)
+		tokenString, err := authUtils.GenerateJWT(id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
 
 		// 🍪 set cookie
-		// c.SetCookie(
-		//   "auth_token",
-		//   tokenString,
-		//   3600*24,
-		//   "/",
-		//   "",
-		//   true,  // secure (true in prod)
-		//   true,  // httpOnly
-		// )
+		c.SetCookie(
+		  "token",
+		  tokenString,
+		  3600*24,
+		  "/",
+		  "",
+		  true,  // secure (true in prod)
+		  true,  // httpOnly
+		)
 
 		frontendUrl := os.Getenv("FRONTEND_URL")
 

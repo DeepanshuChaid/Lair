@@ -46,8 +46,10 @@ func main () {
   // Protected routes
   protectedRoutes := router.Group("/api")
   protectedRoutes.Use(authMiddleware.AuthMiddleware())
-  protectedRoutes.GET("/user", func(ctx *gin.Context) {
-    
+  protectedRoutes.GET("/user", func(c *gin.Context) {
+    c.JSON(200, gin.H{
+      "message": "Hi USER the auth middleware works i guess",
+    })
   })
 
   router.Run(":" + PORT)
