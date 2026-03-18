@@ -46,21 +46,21 @@ func Register() gin.HandlerFunc {
 			return
 		}
 
-		err = database.Pool.QueryRow(ctx, "INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id", body.Name, body.Email, hashedPassword).Scan(&body.Id)
+		err = database.Pool.QueryRow(ctx, "INSERT INTO client (name, email, password) VALUES ($1, $2, $3) RETURNING id", body.Name, body.Email, hashedPassword).Scan(&body.Id)
 
-    if err != nil {
-      c.JSON(500, gin.H{"error": "Database error", "detail": err.Error(),})
-      return
-    }
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Database error", "detail": err.Error()})
+			return
+		}
 
-    c.JSON(200, gin.H{
-      "message": "User created successfully",
-      "user": gin.H{
-        "id": body.Id,
-        "name": body.Name,
-        "email": body.Email,
-      },
-    })
+		c.JSON(200, gin.H{
+			"message": "User created successfully",
+			"user": gin.H{
+				"id":    body.Id,
+				"name":  body.Name,
+				"email": body.Email,
+			},
+		})
 	}
 }
 
@@ -68,6 +68,7 @@ func Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
+
 
 		var body struct {
 			Email    string `json:"email" validate:"required,email"`
@@ -93,7 +94,7 @@ func Login() gin.HandlerFunc {
 			Profile_picture string `json:"profile_picture"`
 		}
 
-		err = database.Pool.QueryRow(ctx, "SELECT id, name, password,  email, profile_picture FROM users WHERE email = $1", body.Email).Scan(&User.Id, &User.Name, &User.Password, &User.Email, &User.Profile_picture)
+		err = database.Pool.QueryRow(ctx, "SELECT id, name, password,  email, profile_picture FROM client WHERE email = $1", body.Email).Scan(&User.Id, &User.Name, &User.Password, &User.Email, &User.Profile_picture)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 			return
@@ -124,15 +125,15 @@ func Login() gin.HandlerFunc {
 			true,
 		)
 
-    c.JSON(200, gin.H{
-      "message": "Login successful",
-      "user": gin.H{
-        "id": User.Id,
-        "name": User.Name,
-        "email": User.Email,
-        "profile_picture": User.Profile_picture,
-      },
-    })
+		c.JSON(200, gin.H{
+			"message": "Login successful",
+			"user": gin.H{
+				"id":              User.Id,
+				"name":            User.Name,
+				"email":           User.Email,
+				"profile_picture": User.Profile_picture,
+			},
+		})
 	}
 }
 

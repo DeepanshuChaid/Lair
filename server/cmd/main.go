@@ -1,15 +1,16 @@
 package main
 
 import (
-        "os"
+	"log"
+	"os"
 
-        "github.com/DeepanshuChaid/Lair/internals/database"
- "github.com/DeepanshuChaid/Lair/internals/middlewares/authMiddleware"
-        "github.com/gin-gonic/gin"
+	"github.com/DeepanshuChaid/Lair/internals/database"
+	"github.com/DeepanshuChaid/Lair/internals/middlewares/authMiddleware"
+	"github.com/gin-gonic/gin"
 
-        "github.com/DeepanshuChaid/Lair/internals/controllers/authController"
+	"github.com/DeepanshuChaid/Lair/internals/controllers/authController"
 
-        "github.com/joho/godotenv"
+	"github.com/joho/godotenv"
 )
 
 func main () {
@@ -17,6 +18,8 @@ func main () {
   godotenv.Load()
 
   database.Connect()
+
+  log.Println(os.Getenv("NEON_DATABASE_URL"))
 
   PORT := os.Getenv("PORT")
 

@@ -4,14 +4,12 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
+packages = ["goose"]
 
 [userenv]
 
 [userenv.shared]
-PORT = "8080"
-FRONTEND_URL = "https://localhost:5000"
-CALLBACK_URL = "https://localhost:5000"
-JWT_SECRET = "b524b41a119374026266d296e7e6654eff86967dd89942d4115bdddf6c785a3c"
+NEON_DATABASE_URL = "postgresql://neondb_owner:npg_RYJ8Xlokd4CT@ep-withered-waterfall-a10jhedj-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 [workflows]
 runButton = "Project"
@@ -36,6 +34,14 @@ waitForPort = 8080
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
 
 [[ports]]
 localPort = 8080

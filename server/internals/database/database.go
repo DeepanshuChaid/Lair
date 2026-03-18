@@ -1,18 +1,23 @@
 package database
 
 import (
-  "context"
-  "log"
-  "os"
-  "time"
+	"context"
+	"log"
+	"os"
+	"time"
 
-  "github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
 var Pool *pgxpool.Pool
 
 func Connect() {
-  databaseUrl := os.Getenv("DATABASE_URL")
+  err := godotenv.Load()
+  if err != nil {
+    log.Fatal("Error loading .env file")
+  }
+  databaseUrl := os.Getenv("NEON_DATABASE_URL")
 
   config, err := pgxpool.ParseConfig(databaseUrl)
   if err != nil {
