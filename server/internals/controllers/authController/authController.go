@@ -47,10 +47,31 @@ func Register() gin.HandlerFunc {
 			return
 		}
 
-		err = database.Pool.QueryRow(ctx, "INSERT INTO client (name, email, password) VALUES ($1, $2, $3) RETURNING id", body.Name, body.Email, hashedPassword).Scan(&body.Id)
-
+		tx, err := database.Pool.Begin(ctx)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Database error", "detail": err.Error()})
+				c.JSON(500, gin.H{"error": "Failed to start transaction"})
+				return
+		}
+		
+		defer tx.Rollback(ctx) // safe rollback if something fails
+		
+		err = tx.QueryRow(ctx, "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", body.Name, body.Email, hashedPassword).Scan(&body.Id)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to create user", "detail": err.Error()})
+			return
+		}
+
+		var authProviderId string
+
+		err = tx.QueryRow(ctx, "INSERT INTO auth_providers (user_id, provider) VALUES ($1, $2) RETURNING id", body.Id, "email").Scan(&authProviderId)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to create auth provider", "detail": err.Error()})
+			return
+		}
+
+		err = tx.Commit(ctx)
+		if err != nil 	{
+			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
 			return
 		}
 
@@ -60,6 +81,7 @@ func Register() gin.HandlerFunc {
 				"id":    body.Id,
 				"name":  body.Name,
 				"email": body.Email,
+				"auth_provider_id": authProviderId,
 			},
 		})
 	}
@@ -95,7 +117,7 @@ func Login() gin.HandlerFunc {
 			Profile_picture string `json:"profile_picture"`
 		}
 
-		err = database.Pool.QueryRow(ctx, "SELECT id, name, password,  email, profile_picture FROM client WHERE email = $1", body.Email).Scan(&User.Id, &User.Name, &User.Password, &User.Email, &User.Profile_picture)
+		err = database.Pool.QueryRow(ctx, "SELECT id, name, password,  email, profile_picture FROM users WHERE email = $1", body.Email).Scan(&User.Id, &User.Name, &User.Password, &User.Email, &User.Profile_picture)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 			return
@@ -180,10 +202,13 @@ func GoogleCallback() gin.HandlerFunc {
 		name := userInfo["name"].(string)
 		picture := userInfo["picture"].(string)
 
+		// START TRANSACTION
+		tx, err := database.Pool.Begin(ctx)
+
 		var id string
 
 		// 🔥 create or find user in DB
-		err = database.Pool.QueryRow(ctx, "INSERT INTO client (name, email, profile_picture) VALUES ($1, $2, $3) RETURNING id", name, email, picture).Scan(&id)
+		err = database.Pool.QueryRow(ctx, "INSERT INTO users (name, email, profile_picture) VALUES ($1, $2, $3) RETURNING id", name, email, picture).Scan(&id)
 		if err != nil {
 			c.JSON(500, gin.H{"message": "database error", "detail": err.Error()})
 			return 
