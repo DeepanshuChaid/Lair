@@ -1,6 +1,7 @@
 package authUtils
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -31,9 +32,11 @@ func GenerateJWT(userID string) (string, error) {
 
 func VerifyJWT(tokenString string) (jwt.MapClaims, error) {
   token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-    return jwtSecret, nil
-  })
-
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, fmt.Errorf("unexpected signing method")
+        }
+        return jwtSecret, nil
+    })
   if err != nil {
     return nil, err
   }
@@ -45,3 +48,5 @@ func VerifyJWT(tokenString string) (jwt.MapClaims, error) {
 
   return nil, err
 }
+
+

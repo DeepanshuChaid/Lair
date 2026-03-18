@@ -27,7 +27,12 @@ func AuthMiddleware() gin.HandlerFunc {
     }
 
     // 👇 extract user id
-    userId := claims["user_id"].(string)
+    userId, ok := claims["user_id"].(string)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token payload"})
+        c.Abort()
+        return
+    }
 
     // attach to context
     c.Set("userId", userId)

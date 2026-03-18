@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 
 	"time"
 
@@ -16,6 +17,8 @@ import (
 )
 
 var validate = validator.New()
+
+var isProduction = os.Getenv("ENV") == "production"
 
 func Register() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -57,8 +60,12 @@ func Register() gin.HandlerFunc {
 		
 		err = tx.QueryRow(ctx, "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", body.Name, body.Email, hashedPassword).Scan(&body.Id)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to create user", "detail": err.Error()})
-			return
+				if strings.Contains(err.Error(), "duplicate key") {
+						c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+						return
+				}
+				c.JSON(500, gin.H{"error": "Failed to create user"})
+				return
 		}
 
 		var authProviderId string
@@ -74,6 +81,24 @@ func Register() gin.HandlerFunc {
 			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
 			return
 		}
+
+		token, err := authUtils.GenerateJWT(body.Id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
+
+		c.SetSameSite(http.SameSiteLaxMode)
+		// set cookie
+		c.SetCookie(
+			"token",
+			token,
+			3600*24,
+			"/",
+			"",
+			isProduction,
+			true,
+		)
 
 		c.JSON(200, gin.H{
 			"message": "User created successfully",
@@ -138,13 +163,14 @@ func Login() gin.HandlerFunc {
 		}
 
 		// 🍪 set cookie
+		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie(
 			"token",
 			token,
 			3600*24,
 			"/",
 			"",
-			false,
+			isProduction,
 			true,
 		)
 
@@ -179,13 +205,13 @@ func GoogleCallback() gin.HandlerFunc {
 
 		code := c.Query("code")
 
-		token, err := oauth.GoogleOAuthConfig.Exchange(context.Background(), code)
+		token, err := oauth.GoogleOAuthConfig.Exchange(ctx, code)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "OAuth failed"})
 			return
 		}
 
-		client := oauth.GoogleOAuthConfig.Client(context.Background(), token)
+		client := oauth.GoogleOAuthConfig.Client(ctx, token)
 
 		resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 		if err != nil {
@@ -243,13 +269,16 @@ func GoogleCallback() gin.HandlerFunc {
 			return 
 		}
 
-		var authProviderId string
-
-	_, err = tx.Exec(ctx, `
-			INSERT INTO auth_providers (user_id, provider)
-			VALUES ($1, $2)
-			ON CONFLICT (user_id, provider) DO NOTHING
-	`, id, "google")
+		_, err = tx.Exec(ctx, `
+				INSERT INTO auth_providers (user_id, provider)
+				VALUES ($1, $2)
+				ON CONFLICT (user_id, provider) DO NOTHING
+		`, id, "google")
+		if err != nil {
+				c.JSON(500, gin.H{"error": "Failed to create auth provider"})
+				return
+		}
+	
 
 		if err = tx.Commit(ctx); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
@@ -264,13 +293,14 @@ func GoogleCallback() gin.HandlerFunc {
 		}
 
 		// 🍪 set cookie
+		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie(
 		  "token",
 		  tokenString,
 		  3600*24,
 		  "/",
 		  "",
-		  true,  // secure (true in prod)
+		  isProduction,  // secure (true in prod)
 		  true,  // httpOnly
 		)
 
