@@ -1,0 +1,47 @@
+modules = ["go-1.21", "nodejs-20", "postgresql-16"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+PORT = "8080"
+FRONTEND_URL = "https://localhost:5000"
+CALLBACK_URL = "https://localhost:5000"
+JWT_SECRET = "b524b41a119374026266d296e7e6654eff86967dd89942d4115bdddf6c785a3c"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && GOPATH=/tmp/gopath go run ./cmd/"
+waitForPort = 8080
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[deployment]
+deploymentTarget = "vm"
+run = ["/home/runner/workspace/server_bin"]
+build = ["bash", "-c", "cd server && go build -o /home/runner/workspace/server_bin ./cmd/"]

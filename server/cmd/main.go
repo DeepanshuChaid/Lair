@@ -1,23 +1,20 @@
 package main
 
 import (
-	"log"
-	"os"
+        "os"
 
-	"github.com/DeepanshuChaid/Lair/internals/database"
+        "github.com/DeepanshuChaid/Lair/internals/database"
  "github.com/DeepanshuChaid/Lair/internals/middlewares/authMiddleware"
-	"github.com/gin-gonic/gin"
+        "github.com/gin-gonic/gin"
 
-	"github.com/DeepanshuChaid/Lair/internals/controllers/authController"
+        "github.com/DeepanshuChaid/Lair/internals/controllers/authController"
 
-	"github.com/joho/godotenv"
+        "github.com/joho/godotenv"
 )
 
 func main () {
-  err := godotenv.Load()
-  if err != nil {
-    log.Fatal("Error loading .env file")
-  }
+  // Load .env if present; ignore error if file not found (env vars set externally)
+  godotenv.Load()
 
   database.Connect()
 
