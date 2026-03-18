@@ -204,14 +204,27 @@ func GoogleCallback() gin.HandlerFunc {
 
 		// START TRANSACTION
 		tx, err := database.Pool.Begin(ctx)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to start transaction"})
+			return
+		}
 
 		var id string
 
 		// 🔥 create or find user in DB
-		err = database.Pool.QueryRow(ctx, "INSERT INTO users (name, email, profile_picture) VALUES ($1, $2, $3) RETURNING id", name, email, picture).Scan(&id)
+		err = tx.QueryRow(ctx, "INSERT INTO users (name, email, profile_picture) VALUES ($1, $2, $3) RETURNING id", name, email, picture).Scan(&id)
 		if err != nil {
 			c.JSON(500, gin.H{"message": "database error", "detail": err.Error()})
 			return 
+		}
+
+		var authProviderId string
+
+		err = tx.QueryRow(ctx, "INSERT INTO auth_providers (user_id, provider) VALUES ($1, $2) RETURNING id", id, "google").Scan(&authProviderId)
+
+		if err = tx.Commit(); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
+			return
 		}
 
 		// // 🔐 generate JWT
