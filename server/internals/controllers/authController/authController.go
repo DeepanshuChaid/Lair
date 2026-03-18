@@ -196,11 +196,26 @@ func GoogleCallback() gin.HandlerFunc {
 		defer resp.Body.Close()
 
 		var userInfo map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&userInfo)
+		if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+				c.JSON(500, gin.H{"error": "Failed to parse user info"})
+				return
+		}
 
-		email := userInfo["email"].(string)
-		name := userInfo["name"].(string)
-		picture := userInfo["picture"].(string)
+		email, ok := userInfo["email"].(string)
+		if !ok {
+				c.JSON(500, gin.H{"error": "Invalid email from Google"})
+				return
+		}
+		name, ok := userInfo["name"].(string)
+		if !ok {
+				c.JSON(500, gin.H{"error": "Invalid name from Google"})
+				return
+		}
+		picture, ok := userInfo["picture"].(string)
+		if !ok {
+				c.JSON(500, gin.H{"error": "Invalid picture from Google"})
+				return
+		}
 
 		// START TRANSACTION
 		tx, err := database.Pool.Begin(ctx)
@@ -209,10 +224,20 @@ func GoogleCallback() gin.HandlerFunc {
 			return
 		}
 
+		defer tx.Rollback(ctx)
+
 		var id string
 
 		// 🔥 create or find user in DB
-		err = tx.QueryRow(ctx, "INSERT INTO users (name, email, profile_picture) VALUES ($1, $2, $3) RETURNING id", name, email, picture).Scan(&id)
+		err = tx.QueryRow(ctx, `
+				INSERT INTO users (name, email, profile_picture)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (email)
+				DO UPDATE SET name = EXCLUDED.name,
+											profile_picture = EXCLUDED.profile_picture
+				RETURNING id
+		`, name, email, picture).Scan(&id)
+		
 		if err != nil {
 			c.JSON(500, gin.H{"message": "database error", "detail": err.Error()})
 			return 
@@ -220,9 +245,13 @@ func GoogleCallback() gin.HandlerFunc {
 
 		var authProviderId string
 
-		err = tx.QueryRow(ctx, "INSERT INTO auth_providers (user_id, provider) VALUES ($1, $2) RETURNING id", id, "google").Scan(&authProviderId)
+	_, err = tx.Exec(ctx, `
+			INSERT INTO auth_providers (user_id, provider)
+			VALUES ($1, $2)
+			ON CONFLICT (user_id, provider) DO NOTHING
+	`, id, "google")
 
-		if err = tx.Commit(); err != nil {
+		if err = tx.Commit(ctx); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
 			return
 		}

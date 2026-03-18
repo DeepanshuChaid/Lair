@@ -13,7 +13,7 @@ CREATE TABLE users (
 
 CREATE TABLE auth_providers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     provider TEXT, -- 'google', 'email'
     provider_user_id TEXT, -- Google ID
     access_token TEXT,
