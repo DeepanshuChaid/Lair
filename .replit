@@ -9,7 +9,7 @@ packages = ["goose"]
 [userenv]
 
 [userenv.shared]
-NEON_DATABASE_URL = "postgresql://neondb_owner:npg_RYJ8Xlokd4CT@ep-withered-waterfall-a10jhedj-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+NEON_DATABASE_URL = "postgresql://neondb_owner:npg_BesHc2uJ5hQR@ep-weathered-dew-a17qau8l-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 [workflows]
 runButton = "Project"
