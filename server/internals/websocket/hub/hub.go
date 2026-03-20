@@ -1,5 +1,6 @@
 package hub
 
+import "github.com/DeepanshuChaid/Lair/internals/websocket/room"
 
 type Hub struct {
 	Rooms map[string]*room.Room
