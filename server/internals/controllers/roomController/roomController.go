@@ -2,11 +2,13 @@ package roomController
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 func CreateRoom() gin.HandlerFunc {
@@ -16,7 +18,16 @@ func CreateRoom() gin.HandlerFunc {
 
 		userId := c.GetString("userId")
 		if userId == "" {
-			c.JSON(401, gin.H{"error": "Unauthorized"})
+			c.JSON(401, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		var body struct {
+			title string `json:"title"`
+		}
+
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"message": "Invalid request body"})
 			return
 		}
 
@@ -24,34 +35,35 @@ func CreateRoom() gin.HandlerFunc {
 
 		tx, err := database.Pool.Begin(ctx)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to start transaction"})
+			c.JSON(500, gin.H{"message": "Failed to start transaction"})
 			return
 		}
 		defer tx.Rollback(ctx)
 
 		// create room
 		err = tx.QueryRow(ctx,
-			"INSERT INTO rooms (owner_id) VALUES ($1) RETURNING id",
+			"INSERT INTO rooms (owner_id, title) VALUES ($1, $2) RETURNING id",
 			userId,
+			body.title,
 		).Scan(&roomId)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to create room"})
+			c.JSON(500, gin.H{"message": "Failed to create room"})
 			return
 		}
 
 		// add owner as member
 		_, err = tx.Exec(ctx,
-			"INSERT INTO room_members (room_id, user_id, role) VALUES ($1, $2, $3)",
+			"INSERT INTO room_member (room_id, user_id, role) VALUES ($1, $2, $3)",
 			roomId, userId, "owner",
 		)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to add member"})
+			c.JSON(500, gin.H{"message": "Failed to add Owner", "details": err.Error(),})
 			return
 		}
 
 		// commit
 		if err = tx.Commit(ctx); err != nil {
-			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
+			c.JSON(500, gin.H{"message": "Failed to commit transaction"})
 			return
 		}
 
@@ -70,30 +82,40 @@ func DeleteRoom() gin.HandlerFunc {
 
 		userId := c.GetString("userId")
 		if userId == "" {
-			c.JSON(401, gin.H{"error": "Unauthorized"})
+			c.JSON(401, gin.H{"message": "Unauthorized"})
 			return
 		}
 
 		roomId := c.Param("id")
 		if roomId == "" {
-			c.JSON(400, gin.H{"error": "Room ID is required"})
+			c.JSON(400, gin.H{"message": "Room ID is required"})
 			return
 		}
 
-		result, err := database.Pool.Exec(ctx,
-			"DELETE FROM rooms WHERE id = $1 AND owner_id = $2",
-			roomId, userId,
-		)
-		if err != nil { 
-			c.JSON(500, gin.H{"error": "Failed to delete room"})
+		var ownerID string
+
+		err := database.Pool.QueryRow(ctx, "SELECT owner_id FROM rooms WHERE id = $1", roomId).Scan(&ownerID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) { // or sql.ErrNoRows
+				c.JSON(404, gin.H{"message": "Room not found"})
+				return
+			}
+			c.JSON(500, gin.H{"message": "Database error"})
 			return
 		}
 
-		rowsAffected := result.RowsAffected()
-		if rowsAffected == 0 {
-			c.JSON(404, gin.H{"error": "Room not found"})
+		if ownerID != userId {
+			c.JSON(403, gin.H{"message": "Unauthorized: You are not the owner"})
 			return
 		}
+
+		// If we got here, they ARE the owner. Now delete.
+		_, err = database.Pool.Exec(ctx, "DELETE FROM rooms WHERE id = $1", roomId)
+		if err != nil {
+			c.JSON(500, gin.H{"message": "Failed to delete room"})
+			return
+		}
+
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Room deleted successfully",

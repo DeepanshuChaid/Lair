@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -9,9 +8,11 @@ import (
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/DeepanshuChaid/Lair/internals/middlewares/authMiddleware"
 	"github.com/DeepanshuChaid/Lair/internals/oauth"
+	"github.com/DeepanshuChaid/Lair/internals/websocket"
 	"github.com/gin-gonic/gin"
 
 	"github.com/DeepanshuChaid/Lair/internals/controllers/authController"
+	"github.com/DeepanshuChaid/Lair/internals/controllers/roomController"
 
 	"github.com/joho/godotenv"
 )
@@ -33,9 +34,8 @@ func main () {
 
   database.Connect()
 
-  log.Println(os.Getenv("NEON_DATABASE_URL"))
-  fmt.Println(os.Getenv("JWT_SECRET"))
-  fmt.Println("CLIENT ID:", os.Getenv("GOOGLE_CLIENT_ID"))
+  // Initialize WebSocket hub
+  hub := websocket.NewHub()
 
   PORT := os.Getenv("PORT")
 
@@ -68,6 +68,12 @@ func main () {
       "message": "Hi USER the auth middleware works i guess",
     })
   })
+
+  // WebSocket route
+  protectedRoutes.POST("/room/create", roomController.CreateRoom())
+  protectedRoutes.DELETE("/room/delete/:id", roomController.DeleteRoom())
+
+  protectedRoutes.GET("/ws/:roomId", websocket.ServerWs(hub))
 
   router.Run(":" + PORT)
 }

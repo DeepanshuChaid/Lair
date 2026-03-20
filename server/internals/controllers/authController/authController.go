@@ -36,26 +36,26 @@ func Register() gin.HandlerFunc {
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
 			return
 		}
 
 		err := validate.Struct(body)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "detail": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body", "detail": err.Error()})
 			return
 		}
 
 		// 🔐 hash password
 		hashedPassword, err := authUtils.HashPassword(body.Password)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to hash password"})
 			return
 		}
 
 		tx, err := database.Pool.Begin(ctx)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to start transaction"})
+			c.JSON(500, gin.H{"message": "Failed to start transaction"})
 			return
 		}
 
@@ -64,10 +64,10 @@ func Register() gin.HandlerFunc {
 		err = tx.QueryRow(ctx, "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", body.Name, body.Email, hashedPassword).Scan(&body.Id)
 		if err != nil {
 			if strings.Contains(err.Error(), "duplicate key") {
-				c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+				c.JSON(http.StatusConflict, gin.H{"message": "Email already exists"})
 				return
 			}
-			c.JSON(500, gin.H{"error": "Failed to create user"})
+			c.JSON(500, gin.H{"message": "Failed to create user"})
 			return
 		}
 
@@ -75,19 +75,19 @@ func Register() gin.HandlerFunc {
 
 		err = tx.QueryRow(ctx, "INSERT INTO auth_providers (user_id, provider) VALUES ($1, $2) RETURNING id", body.Id, "email").Scan(&authProviderId)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to create auth provider", "detail": err.Error()})
+			c.JSON(500, gin.H{"message": "Failed to create auth provider", "detail": err.Error()})
 			return
 		}
 
 		err = tx.Commit(ctx)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
+			c.JSON(500, gin.H{"message": "Failed to commit transaction"})
 			return
 		}
 
 		token, err := authUtils.GenerateJWT(body.Id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to generate token"})
 			return
 		}
 
@@ -126,13 +126,13 @@ func Login() gin.HandlerFunc {
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
 			return
 		}
 
 		err := validate.Struct(body)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "detail": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body", "detail": err.Error()})
 			return
 		}
 
@@ -141,26 +141,25 @@ func Login() gin.HandlerFunc {
 			Name            string `json:"name"`
 			Email           string `json:"email"`
 			Password        string `json:"password"`
-			Profile_picture string `json:"profile_picture"`
 		}
 
-		err = database.Pool.QueryRow(ctx, "SELECT id, password FROM users WHERE email = $1", body.Email).Scan(&User.Id, &User.Password)
+		err = database.Pool.QueryRow(ctx, "SELECT id, password, name, email FROM users WHERE email = $1", body.Email).Scan(&User.Id, &User.Password, &User.Name, &User.Email)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found", "details": err.Error()})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "User not found", "details": err.Error()})
 			return
 		}
 
 		// 🔐 check password
 		err = authUtils.CheckPassword(User.Password, body.Password)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Wrong password, Try another password"})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Wrong password, Try another password"})
 			return
 		}
 
 		// 🔐 generate JWT
 		token, err := authUtils.GenerateJWT(User.Id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to generate token"})
 			return
 		}
 
@@ -182,7 +181,6 @@ func Login() gin.HandlerFunc {
 				"id":              User.Id,
 				"name":            User.Name,
 				"email":           User.Email,
-				"profile_picture": User.Profile_picture,
 			},
 		})
 	}
@@ -209,7 +207,7 @@ func GoogleCallback() gin.HandlerFunc {
 
 		token, err := oauth.GoogleOAuthConfig.Exchange(ctx, code)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "OAuth failed"})
+			c.JSON(500, gin.H{"message": "OAuth failed"})
 			return
 		}
 
@@ -217,7 +215,7 @@ func GoogleCallback() gin.HandlerFunc {
 
 		resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to get user info"})
+			c.JSON(500, gin.H{"message": "Failed to get user info"})
 			return
 		}
 
@@ -225,30 +223,30 @@ func GoogleCallback() gin.HandlerFunc {
 
 		var userInfo map[string]interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-			c.JSON(500, gin.H{"error": "Failed to parse user info"})
+			c.JSON(500, gin.H{"message": "Failed to parse user info"})
 			return
 		}
 
 		email, ok := userInfo["email"].(string)
 		if !ok {
-			c.JSON(500, gin.H{"error": "Invalid email from Google"})
+			c.JSON(500, gin.H{"message": "Invalid email from Google"})
 			return
 		}
 		name, ok := userInfo["name"].(string)
 		if !ok {
-			c.JSON(500, gin.H{"error": "Invalid name from Google"})
+			c.JSON(500, gin.H{"message": "Invalid name from Google"})
 			return
 		}
 		picture, ok := userInfo["picture"].(string)
 		if !ok {
-			c.JSON(500, gin.H{"error": "Invalid picture from Google"})
+			c.JSON(500, gin.H{"message": "Invalid picture from Google"})
 			return
 		}
 
 		// START TRANSACTION
 		tx, err := database.Pool.Begin(ctx)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to start transaction"})
+			c.JSON(500, gin.H{"message": "Failed to start transaction"})
 			return
 		}
 
@@ -267,7 +265,7 @@ func GoogleCallback() gin.HandlerFunc {
 		`, name, email, picture).Scan(&id)
 
 		if err != nil {
-			c.JSON(500, gin.H{"message": "database error", "detail": err.Error()})
+			c.JSON(500, gin.H{"message": "database message", "detail": err.Error()})
 			return
 		}
 
@@ -277,19 +275,19 @@ func GoogleCallback() gin.HandlerFunc {
 				ON CONFLICT (user_id, provider) DO NOTHING
 		`, id, "google")
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to create auth provider"})
+			c.JSON(500, gin.H{"message": "Failed to create auth provider"})
 			return
 		}
 
 		if err = tx.Commit(ctx); err != nil {
-			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
+			c.JSON(500, gin.H{"message": "Failed to commit transaction"})
 			return
 		}
 
 		// // 🔐 generate JWT
 		tokenString, err := authUtils.GenerateJWT(id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to generate token"})
 			return
 		}
 
@@ -320,29 +318,29 @@ func AddProfilePicture() gin.HandlerFunc {
 
 		userId := c.GetString("userId")
 		if userId == "" {
-			c.JSON(401, gin.H{"error": "Unauthorized"})
+			c.JSON(401, gin.H{"message": "Unauthorized"})
 			return
 		}
 
 		file, err := c.FormFile("profile_picture")
 		if err != nil {
-			c.JSON(400, gin.H{"error": "No file uploaded"})
+			c.JSON(400, gin.H{"message": "No file uploaded"})
 			return
 		}
 
 		if file.Size > 5*1024*1024 {
-			c.JSON(400, gin.H{"error": "File too large (max 5MB)"})
+			c.JSON(400, gin.H{"message": "File too large (max 5MB)"})
 			return
 		}
 
 		if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
-			c.JSON(400, gin.H{"error": "Only image files allowed"})
+			c.JSON(400, gin.H{"message": "Only image files allowed"})
 			return
 		}
 
 		openedFile, err := file.Open()
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to open uploaded file"})
+			c.JSON(500, gin.H{"message": "Failed to open uploaded file"})
 			return
 		}
 		defer openedFile.Close()
@@ -353,7 +351,7 @@ func AddProfilePicture() gin.HandlerFunc {
 			Overwrite: api.Bool(true),
 		})
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Cloudinary upload failed", "detail": err.Error()})
+			c.JSON(500, gin.H{"message": "Cloudinary upload failed", "detail": err.Error()})
 			return
 		}
 
@@ -364,7 +362,7 @@ func AddProfilePicture() gin.HandlerFunc {
 			imageUrl, userId,
 		)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "DB update failed", "detail": err.Error()})
+			c.JSON(500, gin.H{"message": "DB update failed", "detail": err.Error()})
 			return
 		}
 
