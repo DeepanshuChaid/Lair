@@ -311,12 +311,18 @@ func GoogleCallback() gin.HandlerFunc {
 	}
 }
 
+
+// add profile picture after registration/login
 func AddProfilePicture() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
 		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(401, gin.H{"error": "Unauthorized"})
+			return
+		}
 
 		file, err := c.FormFile("profile_picture")
 		if err != nil {
@@ -329,7 +335,6 @@ func AddProfilePicture() gin.HandlerFunc {
 			c.JSON(500, gin.H{"error": "Failed to open uploaded file"})
 			return
 		}
-
 		defer openedFile.Close()
 
 		uploadResult, err := cloudinary.Upload(ctx, openedFile, uploader.UploadParams{
@@ -337,23 +342,25 @@ func AddProfilePicture() gin.HandlerFunc {
 			PublicID:  userId,
 			Overwrite: api.Bool(true),
 		})
-
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to upload to Cloudinary", "detail": err.Error()})
+			c.JSON(500, gin.H{"error": "Cloudinary upload failed", "detail": err.Error()})
 			return
 		}
 
-		iamgeUrl := uploadResult.SecureURL
+		imageUrl := uploadResult.SecureURL
 
-		_, err = database.Pool.Exec(ctx, "UPDATE users SET profile_picture = $1 WHERE id = $2", iamgeUrl, userId)
+		_, err = database.Pool.Exec(ctx,
+			"UPDATE users SET profile_picture = $1 WHERE id = $2",
+			imageUrl, userId,
+		)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to update user profile picture", "detail": err.Error()})
+			c.JSON(500, gin.H{"error": "DB update failed", "detail": err.Error()})
 			return
 		}
 
 		c.JSON(200, gin.H{
-			"message": "Profile picture updated successfully",
-			"profile_picture": iamgeUrl,
+			"message":          "Profile picture updated",
+			"profile_picture": imageUrl,
 		})
 	}
 }

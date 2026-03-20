@@ -62,6 +62,7 @@ func main () {
   // Protected routes
   protectedRoutes := router.Group("/api")
   protectedRoutes.Use(authMiddleware.AuthMiddleware())
+  protectedRoutes.POST("/add/profile-picture", authController.AddProfilePicture())
   protectedRoutes.GET("/user", func(c *gin.Context) {
     c.JSON(200, gin.H{
       "message": "Hi USER the auth middleware works i guess",
