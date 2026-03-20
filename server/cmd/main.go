@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -20,6 +21,7 @@ func main () {
   database.Connect()
 
   log.Println(os.Getenv("NEON_DATABASE_URL"))
+  fmt.Println(os.Getenv("JWT_SECRET"))
 
   PORT := os.Getenv("PORT")
 

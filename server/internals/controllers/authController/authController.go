@@ -88,7 +88,7 @@ func Register() gin.HandlerFunc {
 			return
 		}
 
-		c.SetSameSite(http.SameSiteLaxMode)
+		// c.SetSameSite(http.SameSiteLaxMode)
 		// set cookie
 		c.SetCookie(
 			"token",
@@ -162,7 +162,7 @@ func Login() gin.HandlerFunc {
 		}
 
 		// 🍪 set cookie
-		c.SetSameSite(http.SameSiteLaxMode)
+		// c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie(
 			"token",
 			token,
@@ -291,7 +291,7 @@ func GoogleCallback() gin.HandlerFunc {
 		}
 
 		// 🍪 set cookie
-		c.SetSameSite(http.SameSiteLaxMode)
+		// c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie(
 			"token",
 			tokenString,
