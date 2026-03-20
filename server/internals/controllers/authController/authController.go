@@ -52,20 +52,20 @@ func Register() gin.HandlerFunc {
 
 		tx, err := database.Pool.Begin(ctx)
 		if err != nil {
-				c.JSON(500, gin.H{"error": "Failed to start transaction"})
-				return
+			c.JSON(500, gin.H{"error": "Failed to start transaction"})
+			return
 		}
-		
+
 		defer tx.Rollback(ctx) // safe rollback if something fails
-		
+
 		err = tx.QueryRow(ctx, "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", body.Name, body.Email, hashedPassword).Scan(&body.Id)
 		if err != nil {
-				if strings.Contains(err.Error(), "duplicate key") {
-						c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
-						return
-				}
-				c.JSON(500, gin.H{"error": "Failed to create user"})
+			if strings.Contains(err.Error(), "duplicate key") {
+				c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
 				return
+			}
+			c.JSON(500, gin.H{"error": "Failed to create user"})
+			return
 		}
 
 		var authProviderId string
@@ -77,7 +77,7 @@ func Register() gin.HandlerFunc {
 		}
 
 		err = tx.Commit(ctx)
-		if err != nil 	{
+		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
 			return
 		}
@@ -103,9 +103,9 @@ func Register() gin.HandlerFunc {
 		c.JSON(200, gin.H{
 			"message": "User created successfully",
 			"user": gin.H{
-				"id":    body.Id,
-				"name":  body.Name,
-				"email": body.Email,
+				"id":               body.Id,
+				"name":             body.Name,
+				"email":            body.Email,
 				"auth_provider_id": authProviderId,
 			},
 		})
@@ -116,7 +116,6 @@ func Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-
 
 		var body struct {
 			Email    string `json:"email" validate:"required,email"`
@@ -142,9 +141,9 @@ func Login() gin.HandlerFunc {
 			Profile_picture string `json:"profile_picture"`
 		}
 
-		err = database.Pool.QueryRow(ctx, "SELECT id, name, password,  email, profile_picture FROM users WHERE email = $1", body.Email).Scan(&User.Id, &User.Name, &User.Password, &User.Email, &User.Profile_picture)
+		err = database.Pool.QueryRow(ctx, "SELECT id, password FROM users WHERE email = $1", body.Email).Scan(&User.Id, &User.Password)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found", "details": err.Error(),})
 			return
 		}
 
@@ -223,24 +222,24 @@ func GoogleCallback() gin.HandlerFunc {
 
 		var userInfo map[string]interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-				c.JSON(500, gin.H{"error": "Failed to parse user info"})
-				return
+			c.JSON(500, gin.H{"error": "Failed to parse user info"})
+			return
 		}
 
 		email, ok := userInfo["email"].(string)
 		if !ok {
-				c.JSON(500, gin.H{"error": "Invalid email from Google"})
-				return
+			c.JSON(500, gin.H{"error": "Invalid email from Google"})
+			return
 		}
 		name, ok := userInfo["name"].(string)
 		if !ok {
-				c.JSON(500, gin.H{"error": "Invalid name from Google"})
-				return
+			c.JSON(500, gin.H{"error": "Invalid name from Google"})
+			return
 		}
 		picture, ok := userInfo["picture"].(string)
 		if !ok {
-				c.JSON(500, gin.H{"error": "Invalid picture from Google"})
-				return
+			c.JSON(500, gin.H{"error": "Invalid picture from Google"})
+			return
 		}
 
 		// START TRANSACTION
@@ -263,10 +262,10 @@ func GoogleCallback() gin.HandlerFunc {
 											profile_picture = EXCLUDED.profile_picture
 				RETURNING id
 		`, name, email, picture).Scan(&id)
-		
+
 		if err != nil {
 			c.JSON(500, gin.H{"message": "database error", "detail": err.Error()})
-			return 
+			return
 		}
 
 		_, err = tx.Exec(ctx, `
@@ -275,10 +274,9 @@ func GoogleCallback() gin.HandlerFunc {
 				ON CONFLICT (user_id, provider) DO NOTHING
 		`, id, "google")
 		if err != nil {
-				c.JSON(500, gin.H{"error": "Failed to create auth provider"})
-				return
+			c.JSON(500, gin.H{"error": "Failed to create auth provider"})
+			return
 		}
-	
 
 		if err = tx.Commit(ctx); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to commit transaction"})
@@ -295,13 +293,13 @@ func GoogleCallback() gin.HandlerFunc {
 		// 🍪 set cookie
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie(
-		  "token",
-		  tokenString,
-		  3600*24,
-		  "/",
-		  "",
-		  isProduction,  // secure (true in prod)
-		  true,  // httpOnly
+			"token",
+			tokenString,
+			3600*24,
+			"/",
+			"",
+			isProduction, // secure (true in prod)
+			true,         // httpOnly
 		)
 
 		frontendUrl := os.Getenv("FRONTEND_URL")
