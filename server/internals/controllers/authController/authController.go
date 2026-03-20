@@ -330,6 +330,16 @@ func AddProfilePicture() gin.HandlerFunc {
 			return
 		}
 
+		if file.Size > 5*1024*1024 {
+			c.JSON(400, gin.H{"error": "File too large (max 5MB)"})
+			return
+		}
+
+		if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
+			c.JSON(400, gin.H{"error": "Only image files allowed"})
+			return
+		}
+
 		openedFile, err := file.Open()
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to open uploaded file"})
