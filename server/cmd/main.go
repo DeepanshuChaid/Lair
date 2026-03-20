@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/DeepanshuChaid/Lair/internals/cloudinary"
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/DeepanshuChaid/Lair/internals/middlewares/authMiddleware"
 	"github.com/DeepanshuChaid/Lair/internals/oauth"
@@ -19,6 +20,16 @@ func main () {
   // Load .env if present; ignore error if file not found (env vars set externally)
   godotenv.Load()
   oauth.InitGoogleOAuth()
+
+  // cloudinary init
+  err := cloudinary.InitCloudinary(
+    os.Getenv("CLOUDINARY_CLOUD_NAME"),
+    os.Getenv("CLOUDINARY_API_KEY"),
+    os.Getenv("CLOUDINARY_API_SECRET"),
+  )
+  if err != nil {
+    log.Fatalf("Failed to initialize Cloudinary: %v", err)
+  }
 
   database.Connect()
 

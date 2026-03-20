@@ -9,9 +9,12 @@ import (
 
 	"time"
 
+	"github.com/DeepanshuChaid/Lair/internals/cloudinary"
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/DeepanshuChaid/Lair/internals/oauth"
 	"github.com/DeepanshuChaid/Lair/internals/utils/authUtils"
+	"github.com/cloudinary/cloudinary-go/v2/api"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 )
@@ -143,7 +146,7 @@ func Login() gin.HandlerFunc {
 
 		err = database.Pool.QueryRow(ctx, "SELECT id, password FROM users WHERE email = $1", body.Email).Scan(&User.Id, &User.Password)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found", "details": err.Error(),})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found", "details": err.Error()})
 			return
 		}
 
@@ -305,5 +308,52 @@ func GoogleCallback() gin.HandlerFunc {
 		frontendUrl := os.Getenv("FRONTEND_URL")
 
 		c.Redirect(302, frontendUrl)
+	}
+}
+
+func AddProfilePicture() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		userId := c.GetString("userId")
+
+		file, err := c.FormFile("profile_picture")
+		if err != nil {
+			c.JSON(400, gin.H{"error": "No file uploaded"})
+			return
+		}
+
+		openedFile, err := file.Open()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to open uploaded file"})
+			return
+		}
+
+		defer openedFile.Close()
+
+		uploadResult, err := cloudinary.Upload(ctx, openedFile, uploader.UploadParams{
+			Folder:    "profile_pictures",
+			PublicID:  userId,
+			Overwrite: api.Bool(true),
+		})
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to upload to Cloudinary", "detail": err.Error()})
+			return
+		}
+
+		iamgeUrl := uploadResult.SecureURL
+
+		_, err = database.Pool.Exec(ctx, "UPDATE users SET profile_picture = $1 WHERE id = $2", iamgeUrl, userId)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to update user profile picture", "detail": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"message": "Profile picture updated successfully",
+			"profile_picture": iamgeUrl,
+		})
 	}
 }
