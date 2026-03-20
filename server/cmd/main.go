@@ -7,6 +7,7 @@ import (
 
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/DeepanshuChaid/Lair/internals/middlewares/authMiddleware"
+	"github.com/DeepanshuChaid/Lair/internals/oauth"
 	"github.com/gin-gonic/gin"
 
 	"github.com/DeepanshuChaid/Lair/internals/controllers/authController"
@@ -17,11 +18,13 @@ import (
 func main () {
   // Load .env if present; ignore error if file not found (env vars set externally)
   godotenv.Load()
+  oauth.InitGoogleOAuth()
 
   database.Connect()
 
   log.Println(os.Getenv("NEON_DATABASE_URL"))
   fmt.Println(os.Getenv("JWT_SECRET"))
+  fmt.Println("CLIENT ID:", os.Getenv("GOOGLE_CLIENT_ID"))
 
   PORT := os.Getenv("PORT")
 
