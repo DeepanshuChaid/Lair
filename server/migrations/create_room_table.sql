@@ -19,7 +19,7 @@ CREATE TABLE rooms (
   updated_at TIMESTAMP DEFAULT now()
 )
 
-CREATE TABLE room_members (
+CREATE TABLE room_member (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,

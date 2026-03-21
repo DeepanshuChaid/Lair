@@ -2,6 +2,8 @@ package websocket
 
 import (
 	"net/http"
+	"time"
+	"encoding/json"
 
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/gin-gonic/gin"
@@ -18,43 +20,48 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userId := c.GetString("userId")
 		if userId == "" {
-			c.JSON(401, gin.H{"error": "Unauthorized"})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 			return
 		}
 
 		roomId := c.Param("roomId")
 		if roomId == "" {
-			c.JSON(400, gin.H{"error": "Room ID is required"})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
 			return
 		}
 
-		// Verify room exists
+		// DATABASE VALIDATION
+		var isPublic bool
 		err := database.Pool.QueryRow(c.Request.Context(),
-			"SELECT id FROM rooms WHERE id = $1", roomId).Scan(&roomId)
+			"SELECT is_public FROM rooms WHERE id = $1", roomId).Scan(&isPublic)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Room not found"})
+			c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
 			return
 		}
 
-		// Get room state from DB
-		var roomState interface{}
-		err = database.Pool.QueryRow(c.Request.Context(),
-			"SELECT state FROM room_state WHERE room_id = $1", roomId).Scan(&roomState)
+		// UPSERT Member: Only add them if they aren't already there.
+		// "ON CONFLICT DO NOTHING" prevents the 500 error if they refresh.
+		_, err = database.Pool.Exec(c.Request.Context(),
+			`INSERT INTO room_member (room_id, user_id) 
+			 VALUES ($1, $2) 
+			 ON CONFLICT (room_id, user_id) DO NOTHING`, roomId, userId)
+		
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room state"})
+			if !isPublic {
+				c.JSON(http.StatusForbidden, gin.H{"message": "Room is private"})
+				return
+			}
+			c.JSON(http.StatusForbidden, gin.H{"message": "Failed to join room", "error": err.Error(),})
 			return
 		}
+
 
 		// Upgrade connection
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upgrade to WebSocket"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to upgrade to WebSocket", "error": err.Error(),})
 			return
 		}
-
-		// Send initial state
-		conn.WriteJSON(roomState)
-		conn.WriteJSON(map[string]string{"type": "init", "message": "Welcome to the room!"})
 
 		// Get or create room
 		room, err := hub.GetRoom(roomId)
@@ -67,6 +74,19 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 		// Create client and register
 		client := NewClient(conn, userId, roomId, hub)
 		room.Register <- client
+
+		var rawState json.RawMessage
+		err = database.Pool.QueryRow(c.Request.Context(),
+			"SELECT state FROM room_state WHERE room_id = $1", roomId).Scan(&rawState)
+		
+		if err == nil && len(rawState) > 0 {
+			// Send current board state as the first message
+			client.Send <- &Message{
+				Type:    "init_state",
+				Content: rawState,
+				SentAt:  time.Now().UnixMilli(),
+			}
+		}
 
 		// Start pumps
 		go client.WritePump()

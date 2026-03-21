@@ -56,10 +56,11 @@ func (r *Room) registerClient(client *Client) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// if r.Client is somehow a holy nil we just make it :)
 	if r.Clients == nil {
 		r.Clients = make(map[string]*Client)
 	}
-	r.Clients[client.ID] = client
+	r.Clients[client.ID] = client // simply add the client to the map
 
 	log.Println("Client registered:", client.ID)
 }
@@ -70,6 +71,8 @@ func (r *Room) unregisterClient(client *Client) {
 
 	if _, ok := r.Clients[client.ID]; ok {
 		delete(r.Clients, client.ID)
+		// here the chan is closed no further messages can be sent to the channel 
+		// this is done so that the write pump is terminated 
 		close(client.Send)
 		log.Println("Client unregistered:", client.ID)
 
@@ -97,6 +100,7 @@ func (r *Room) broadcastMessage(message *Message) {
 func (r *Room) GetRoomClients() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	// here we rlock block the func until there are not changes made it the room
 
 	return len(r.Clients)
 }
