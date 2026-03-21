@@ -11,6 +11,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ==================================== //
+//
+//	Create Room            //
+//
+// ==================================== //
 func CreateRoom() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -94,6 +99,11 @@ func CreateRoom() gin.HandlerFunc {
 	}
 }
 
+// ==================================== //
+//
+//	Delete Room            //
+//
+// ==================================== //
 func DeleteRoom() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -138,5 +148,80 @@ func DeleteRoom() gin.HandlerFunc {
 			"message": "Room deleted successfully",
 			"roomId":  roomId,
 		})
+	}
+}
+
+// ==================================== //
+//
+//	Update Room            //
+//
+// ==================================== //
+func UpdateRoom() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		roomId := c.Param("id")
+		if roomId == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
+			return
+		}
+
+		var body struct {
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			IsPublic    bool   `json:"is_public"`
+		}
+
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+			return
+		}
+
+		var ownerID string
+
+		err := database.Pool.QueryRow(ctx, "SELECT owner_id FROM rooms WHERE id = $1", roomId).Scan(&ownerID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+			return
+		}
+
+		if ownerID != userId {
+			c.JSON(http.StatusForbidden, gin.H{
+				"message": "Unauthorized: You are not the owner",
+				"details": "Only the room owner can update the room",
+			})
+			return
+		}
+
+		_, err = database.Pool.Exec(
+			ctx,
+			"UPDATE rooms SET title = $2, description = $3, is_public = $4 WHERE id = $1",
+			roomId,
+			body.Title,
+			body.Description,
+			body.IsPublic,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update room"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Room updated successfully",
+			"roomId":  roomId,
+			"data":    body,
+		})
+
 	}
 }
