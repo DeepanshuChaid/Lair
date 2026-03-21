@@ -2,6 +2,7 @@ package roomController
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/DeepanshuChaid/Lair/internals/cloudinary"
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	roomModel "github.com/DeepanshuChaid/Lair/internals/models/room"
+	cache "github.com/DeepanshuChaid/Lair/internals/redis"
 	"github.com/cloudinary/cloudinary-go/v2/api"
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/gin-gonic/gin"
@@ -34,13 +36,26 @@ func GetUserRooms() gin.HandlerFunc {
 
 		var Rooms []roomModel.Room
 
+		// Try to get from cache first
+		cachedData, err := cache.Get(ctx, "rooms:"+userId)
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedData), &Rooms); err == nil {
+				c.JSON(http.StatusOK, gin.H{
+					"message": "Rooms fetched successfully (from cache)",
+					"rooms":   Rooms,
+					"cached":  true,
+				})
+				return
+			}
+		}
+
 		rows, err := database.Pool.Query(
 			ctx,
 			"SELECT id, title, description, is_public, thumbnail_url, created_at, updated_at FROM rooms WHERE owner_id = $1",
 			userId,
 		)
 		if err != nil {
-			c.JSON(500, gin.H{"message": "Database error", "details": err.Error(),})
+			c.JSON(500, gin.H{"message": "Database error", "details": err.Error()})
 			return
 		}
 		defer rows.Close()
@@ -56,10 +71,16 @@ func GetUserRooms() gin.HandlerFunc {
 				&room.CreatedAt,
 				&room.UpdatedAt,
 			); err != nil {
-				c.JSON(500, gin.H{"message": "Database error", "details": err.Error(),})
+				c.JSON(500, gin.H{"message": "Database error", "details": err.Error()})
 				return
 			}
 			Rooms = append(Rooms, room)
+		}
+
+		// Cache the result for 5 minutes
+		stringifiedData, err := json.Marshal(Rooms)
+		if err == nil {
+			cache.Set(ctx, "rooms:"+userId, stringifiedData, 5*time.Hour)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
@@ -151,7 +172,13 @@ func CreateRoom() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		err = cache.Delete(ctx, "rooms:"+userId)
+		if err != nil {
+			c.JSON(500, gin.H{"message": "Failed to delete cached data"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{
 			"message": "Room created successfully",
 			"roomId":  roomId,
 		})
@@ -200,6 +227,12 @@ func DeleteRoom() gin.HandlerFunc {
 		_, err = database.Pool.Exec(ctx, "DELETE FROM rooms WHERE id = $1", roomId)
 		if err != nil {
 			c.JSON(500, gin.H{"message": "Failed to delete room"})
+			return
+		}
+
+		err = cache.Delete(ctx, "rooms:"+userId)
+		if err != nil {
+			c.JSON(500, gin.H{"message": "Failed to delete cached data"})
 			return
 		}
 
@@ -276,6 +309,12 @@ func UpdateRoom() gin.HandlerFunc {
 			return
 		}
 
+		err = cache.Delete(ctx, "rooms:"+userId)
+		if err != nil {
+			c.JSON(500, gin.H{"message": "Failed to delete cached data"})
+			return
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Room updated successfully",
 			"roomId":  roomId,
@@ -284,7 +323,6 @@ func UpdateRoom() gin.HandlerFunc {
 
 	}
 }
-
 
 // ==================================== //
 // Update Room Thumbnail   //
@@ -343,7 +381,7 @@ func UpdateRoomThumbnail() gin.HandlerFunc {
 		imageUrl := uploadResult.SecureURL
 
 		_, err = database.Pool.Exec(
-			ctx, 
+			ctx,
 			"UPDATE rooms SET thumbnail_url = $1 WHERE id = $2",
 			imageUrl, roomId,
 		)
@@ -357,9 +395,15 @@ func UpdateRoomThumbnail() gin.HandlerFunc {
 			return
 		}
 
+		err = cache.Delete(ctx, "rooms:"+userId)
+		if err != nil {
+			c.JSON(500, gin.H{"message": "Failed to delete cached data"})
+			return
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Thumbnail updated successfully",
-			"roomId":  roomId,
+			"message":   "Thumbnail updated successfully",
+			"roomId":    roomId,
 			"thumbnail": imageUrl,
 		})
 	}
