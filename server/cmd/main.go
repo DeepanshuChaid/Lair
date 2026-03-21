@@ -76,6 +76,7 @@ func main () {
   })
 
   // WebSocket route
+  protectedRoutes.GET("/room/get", roomController.GetUserRooms())
   protectedRoutes.POST("/room/create", roomController.CreateRoom())
   protectedRoutes.DELETE("/room/delete/:id", roomController.DeleteRoom())
   protectedRoutes.PUT("/room/update/:id", roomController.UpdateRoom())

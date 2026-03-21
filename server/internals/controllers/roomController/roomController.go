@@ -7,9 +7,64 @@ import (
 	"time"
 
 	"github.com/DeepanshuChaid/Lair/internals/database"
+	roomModel "github.com/DeepanshuChaid/Lair/internals/models/room"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
+
+// ==================================== //
+//
+//	Get users rooms          //
+//
+// ==================================== //
+func GetUserRooms() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(401, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		var Rooms []roomModel.Room
+
+		rows, err := database.Pool.Query(
+			ctx,
+			"SELECT id, title, description, is_public, thumbnail_url, created_at, updated_at FROM rooms WHERE owner_id = $1",
+			userId,
+		)
+		if err != nil {
+			c.JSON(500, gin.H{"message": "Database error", "details": err.Error(),})
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var room roomModel.Room
+			if err := rows.Scan(
+				&room.ID,
+				&room.Title,
+				&room.Description,
+				&room.IsPublic,
+				&room.Thumbnail,
+				&room.CreatedAt,
+				&room.UpdatedAt,
+			); err != nil {
+				c.JSON(500, gin.H{"message": "Database error", "details": err.Error(),})
+				return
+			}
+			Rooms = append(Rooms, room)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Rooms fetched successfully",
+			"rooms":   Rooms,
+		})
+
+	}
+}
 
 // ==================================== //
 //

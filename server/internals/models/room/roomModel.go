@@ -10,7 +10,7 @@ type Room struct {
 
 	IsPublic bool `json:"isPublic"`
 
-	Thumbnail string `json:"thumbnail"`
+	Thumbnail *string `json:"thumbnail"`
 
 	Version int `json:"version"`
 
