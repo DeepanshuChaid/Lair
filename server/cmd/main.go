@@ -66,20 +66,15 @@ func main() {
 	authRoutes := router.Group("/auth")
 	authRoutes.POST("/register", authController.Register())
 	authRoutes.POST("/login", authController.Login())
-	// google oauth
 	authRoutes.GET("/google", authController.GoogleLogin())
 	authRoutes.GET("/google/callback", authController.GoogleCallback())
+	authRoutes.POST("/logout", authController.Logout())
 
 	// Protected routes
 	protectedRoutes := router.Group("/api")
 	protectedRoutes.Use(authMiddleware.AuthMiddleware())
+	protectedRoutes.GET("/user", authController.GetUser())
 	protectedRoutes.POST("/add/profile-picture", authController.AddProfilePicture())
-	protectedRoutes.GET("/user", func(c *gin.Context) {
-
-		c.JSON(200, gin.H{
-			"message": "Hi USER the auth middleware works i guess",
-		})
-	})
 
 	// WebSocket route
 	protectedRoutes.GET("/room/get", roomController.GetUserRooms())

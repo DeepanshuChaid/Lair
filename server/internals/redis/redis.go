@@ -17,7 +17,7 @@ func Init(redisURL string) error {
 
 	Client = redis.NewClient(opt)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
 
 	_, err = Client.Ping(ctx).Result()
@@ -26,4 +26,25 @@ func Init(redisURL string) error {
 
 func Close() error {
 	return Client.Close()
+}
+
+// SET - store a value
+func Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	return Client.Set(ctx, key, value, expiration).Err()
+}
+
+// GET - retrieve a value
+func Get(ctx context.Context, key string) (string, error) {
+	return Client.Get(ctx, key).Result()
+}
+
+// DELETE - remove a key
+func Delete(ctx context.Context, key string) error {
+	return Client.Del(ctx, key).Err()
+}
+
+// EXISTS - check if key exists
+func Exists(ctx context.Context, key string) (bool, error) {
+	val, err := Client.Exists(ctx, key).Result()
+	return val > 0, err
 }
