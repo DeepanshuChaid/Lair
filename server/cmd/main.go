@@ -3,12 +3,14 @@ package main
 import (
 	"log"
 	"os"
-  "github.com/gin-contrib/cors"
+
+	"github.com/gin-contrib/cors"
 
 	"github.com/DeepanshuChaid/Lair/internals/cloudinary"
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/DeepanshuChaid/Lair/internals/middlewares/authMiddleware"
 	"github.com/DeepanshuChaid/Lair/internals/oauth"
+	cache "github.com/DeepanshuChaid/Lair/internals/redis"
 	"github.com/DeepanshuChaid/Lair/internals/websocket"
 	"github.com/gin-gonic/gin"
 
@@ -18,71 +20,75 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func main () {
-  // Load .env if present; ignore error if file not found (env vars set externally)
-  godotenv.Load()
-  oauth.InitGoogleOAuth()
+func main() {
+	// Load .env if present; ignore error if file not found (env vars set externally)
+	godotenv.Load()
+	oauth.InitGoogleOAuth()
 
-  // cloudinary init
-  err := cloudinary.InitCloudinary(
-    os.Getenv("CLOUDINARY_CLOUD_NAME"),
-    os.Getenv("CLOUDINARY_API_KEY"),
-    os.Getenv("CLOUDINARY_API_SECRET"),
-  )
-  if err != nil {
-    log.Fatalf("Failed to initialize Cloudinary: %v", err)
-  }
+	redisURL := os.Getenv("REDIS_URL")
+	if err := cache.Init(redisURL); err != nil {
+		log.Fatal("Redis connection failed:", err)
+	}
 
-  database.Connect()
-  
-  // Initialize WebSocket hub
-  hub := websocket.NewHub()
-  
-  PORT := os.Getenv("PORT")
-  
-  router := gin.Default()
-  
-  router.Use(cors.New(cors.Config{
-    AllowOrigins:     []string{os.Getenv("FRONTEND_URL")}, 
-    AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
-    AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
-    AllowCredentials: true,
-  }))
+	// cloudinary init
+	err := cloudinary.InitCloudinary(
+		os.Getenv("CLOUDINARY_CLOUD_NAME"),
+		os.Getenv("CLOUDINARY_API_KEY"),
+		os.Getenv("CLOUDINARY_API_SECRET"),
+	)
+	if err != nil {
+		log.Fatalf("Failed to initialize Cloudinary: %v", err)
+	}
 
-  router.GET("/", func(c *gin.Context) {
-    c.JSON(200, gin.H{
-      "message": "Hi USER",
-    })
-  })
+	database.Connect()
 
-  // Public routes
-  authRoutes := router.Group("/auth")
-  authRoutes.POST("/register", authController.Register())
-  authRoutes.POST("/login", authController.Login())
-  // google oauth
-  authRoutes.GET("/google", authController.GoogleLogin())
-  authRoutes.GET("/google/callback", authController.GoogleCallback())
-  
+	// Initialize WebSocket hub
+	hub := websocket.NewHub()
 
-  // Protected routes
-  protectedRoutes := router.Group("/api")
-  protectedRoutes.Use(authMiddleware.AuthMiddleware())
-  protectedRoutes.POST("/add/profile-picture", authController.AddProfilePicture())
-  protectedRoutes.GET("/user", func(c *gin.Context) {
+	PORT := os.Getenv("PORT")
 
-    c.JSON(200, gin.H{
-      "message": "Hi USER the auth middleware works i guess",
-    })
-  })
+	router := gin.Default()
 
-  // WebSocket route
-  protectedRoutes.GET("/room/get", roomController.GetUserRooms())
-  protectedRoutes.POST("/room/create", roomController.CreateRoom())
-  protectedRoutes.DELETE("/room/delete/:id", roomController.DeleteRoom())
-  protectedRoutes.PUT("/room/update/:id", roomController.UpdateRoom())
-  protectedRoutes.POST("/room/uploadthumbnail/:id", roomController.UpdateRoomThumbnail())
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{os.Getenv("FRONTEND_URL")},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowCredentials: true,
+	}))
 
-  protectedRoutes.GET("/ws/:roomId", websocket.ServerWs(hub))
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Hi USER",
+		})
+	})
 
-  router.Run(":" + PORT)
+	// Public routes
+	authRoutes := router.Group("/auth")
+	authRoutes.POST("/register", authController.Register())
+	authRoutes.POST("/login", authController.Login())
+	// google oauth
+	authRoutes.GET("/google", authController.GoogleLogin())
+	authRoutes.GET("/google/callback", authController.GoogleCallback())
+
+	// Protected routes
+	protectedRoutes := router.Group("/api")
+	protectedRoutes.Use(authMiddleware.AuthMiddleware())
+	protectedRoutes.POST("/add/profile-picture", authController.AddProfilePicture())
+	protectedRoutes.GET("/user", func(c *gin.Context) {
+
+		c.JSON(200, gin.H{
+			"message": "Hi USER the auth middleware works i guess",
+		})
+	})
+
+	// WebSocket route
+	protectedRoutes.GET("/room/get", roomController.GetUserRooms())
+	protectedRoutes.POST("/room/create", roomController.CreateRoom())
+	protectedRoutes.DELETE("/room/delete/:id", roomController.DeleteRoom())
+	protectedRoutes.PUT("/room/update/:id", roomController.UpdateRoom())
+	protectedRoutes.POST("/room/uploadthumbnail/:id", roomController.UpdateRoomThumbnail())
+
+	protectedRoutes.GET("/ws/:roomId", websocket.ServerWs(hub))
+
+	router.Run(":" + PORT)
 }
