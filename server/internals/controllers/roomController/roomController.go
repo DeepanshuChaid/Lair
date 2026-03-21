@@ -23,7 +23,7 @@ func CreateRoom() gin.HandlerFunc {
 		}
 
 		var body struct {
-			title string `json:"title"`
+			title string 
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -48,6 +48,20 @@ func CreateRoom() gin.HandlerFunc {
 		).Scan(&roomId)
 		if err != nil {
 			c.JSON(500, gin.H{"message": "Failed to create room"})
+			return
+		}
+
+		_, err = tx.Exec(ctx,
+		`INSERT INTO room_state (room_id, state)
+		VALUES ($1, '{}'::jsonb)
+		ON CONFLICT (room_id) DO NOTHING`,
+		roomId,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "Failed to initialize room state",
+				"details": err.Error(),
+			})
 			return
 		}
 

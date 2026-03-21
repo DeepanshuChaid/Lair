@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+  "github.com/gin-contrib/cors"
 
 	"github.com/DeepanshuChaid/Lair/internals/cloudinary"
 	"github.com/DeepanshuChaid/Lair/internals/database"
@@ -33,13 +34,20 @@ func main () {
   }
 
   database.Connect()
-
+  
   // Initialize WebSocket hub
   hub := websocket.NewHub()
-
+  
   PORT := os.Getenv("PORT")
-
+  
   router := gin.Default()
+  
+  router.Use(cors.New(cors.Config{
+    AllowOrigins:     []string{os.Getenv("FRONTEND_URL")}, 
+    AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+    AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+    AllowCredentials: true,
+  }))
 
   router.GET("/", func(c *gin.Context) {
     c.JSON(200, gin.H{
@@ -49,11 +57,8 @@ func main () {
 
   // Public routes
   authRoutes := router.Group("/auth")
-
   authRoutes.POST("/register", authController.Register())
   authRoutes.POST("/login", authController.Login())
-
-  
   // google oauth
   authRoutes.GET("/google", authController.GoogleLogin())
   authRoutes.GET("/google/callback", authController.GoogleCallback())
@@ -64,6 +69,7 @@ func main () {
   protectedRoutes.Use(authMiddleware.AuthMiddleware())
   protectedRoutes.POST("/add/profile-picture", authController.AddProfilePicture())
   protectedRoutes.GET("/user", func(c *gin.Context) {
+
     c.JSON(200, gin.H{
       "message": "Hi USER the auth middleware works i guess",
     })

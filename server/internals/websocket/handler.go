@@ -3,6 +3,7 @@ package websocket
 import (
 	"net/http"
 
+	"github.com/DeepanshuChaid/Lair/internals/database"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -23,6 +24,21 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 		}
 
 		roomId := c.Param("roomId")
+		var roomState interface{}
+
+		err := database.Pool.QueryRow(c.Request.Context(),
+		 "SELECT id FROM rooms WHERE id = $1", roomId).Scan(&roomId)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Room not found"})
+			return
+		}
+
+		err = database.Pool.QueryRow(c.Request.Context(),
+			"SELECT state FROM room_state WHERE room_id = $1", roomId).Scan(&roomState)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room state"})
+			return
+		}
 
 		// Upgrade the HTTP connection to a WebSocket connection
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -30,6 +46,8 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upgrade to WebSocket"})
 			return
 		}
+
+		conn.WriteJSON(roomState)
 
 		room, err := hub.GetRoom(roomId)
 		if err != nil {
