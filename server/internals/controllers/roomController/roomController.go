@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/DeepanshuChaid/Lair/internals/cloudinary"
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	roomModel "github.com/DeepanshuChaid/Lair/internals/models/room"
+	"github.com/cloudinary/cloudinary-go/v2/api"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
@@ -278,5 +282,85 @@ func UpdateRoom() gin.HandlerFunc {
 			"data":    body,
 		})
 
+	}
+}
+
+
+// ==================================== //
+// Update Room Thumbnail   //
+// ==================================== //
+func UpdateRoomThumbnail() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		roomId := c.Param("id")
+		if roomId == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
+			return
+		}
+
+		file, err := c.FormFile("thumbnail")
+		if err != nil {
+			c.JSON(400, gin.H{"message": "No file uploaded"})
+			return
+		}
+
+		if file.Size > 5*1024*1024 {
+			c.JSON(400, gin.H{"message": "File too large (max 5MB)"})
+			return
+		}
+
+		if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
+			c.JSON(400, gin.H{"message": "Only image files allowed"})
+			return
+		}
+
+		openedFile, err := file.Open()
+		if err != nil {
+			c.JSON(500, gin.H{"message": "Failed to open uploaded file"})
+			return
+		}
+		defer openedFile.Close()
+
+		uploadResult, err := cloudinary.Upload(ctx, openedFile, uploader.UploadParams{
+			Folder:    "thumbnails",
+			PublicID:  userId,
+			Overwrite: api.Bool(true),
+		})
+
+		if err != nil {
+			c.JSON(500, gin.H{"message": "Cloudinary upload failed", "detail": err.Error()})
+			return
+		}
+
+		imageUrl := uploadResult.SecureURL
+
+		_, err = database.Pool.Exec(
+			ctx, 
+			"UPDATE rooms SET thumbnail_url = $1 WHERE id = $2",
+			imageUrl, roomId,
+		)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
+				return
+			}
+			c.JSON(500, gin.H{"message": "DB update failed", "detail": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Thumbnail updated successfully",
+			"roomId":  roomId,
+			"thumbnail": imageUrl,
+		})
 	}
 }

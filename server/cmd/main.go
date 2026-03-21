@@ -80,6 +80,7 @@ func main () {
   protectedRoutes.POST("/room/create", roomController.CreateRoom())
   protectedRoutes.DELETE("/room/delete/:id", roomController.DeleteRoom())
   protectedRoutes.PUT("/room/update/:id", roomController.UpdateRoom())
+  protectedRoutes.POST("/room/uploadthumbnail/:id", roomController.UpdateRoomThumbnail())
 
   protectedRoutes.GET("/ws/:roomId", websocket.ServerWs(hub))
 
