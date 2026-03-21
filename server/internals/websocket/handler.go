@@ -54,11 +54,14 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 
 		// Send initial state
 		conn.WriteJSON(roomState)
+		conn.WriteJSON(map[string]string{"type": "init", "message": "Welcome to the room!"})
 
 		// Get or create room
 		room, err := hub.GetRoom(roomId)
 		if err != nil {
 			room = NewRoom(roomId, "naam me kya rakha hai", userId)
+			hub.RegisterRoom <- room
+			go room.Run()
 		}
 
 		// Create client and register

@@ -57,6 +57,8 @@ func (c *Client) ReadPump(room *Room) {
 			}
 			break
 		}
+		log.Printf("RAW MESSAGE: %+v\n", message)
+		
 
 		message.RoomId = c.RoomID
 		message.UserId = c.UserId

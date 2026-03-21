@@ -44,6 +44,7 @@ func main() {
 
 	// Initialize WebSocket hub
 	hub := websocket.NewHub()
+	go hub.Run()
 
 	PORT := os.Getenv("PORT")
 
