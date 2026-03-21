@@ -1,6 +1,9 @@
 package websocket
 
-import "log"
+import (
+	"log"
+	"sync"
+)
 
 type Room struct {
 	ID      string
@@ -13,6 +16,9 @@ type Room struct {
 	Register   chan *Client
 	Unregister chan *Client
 	Broadcast  chan []Message
+
+	// mu is used to synchronize access to the Clients map and State
+	mu         sync.RWMutex
 }
 
 func NewRoom(id, name, ownerID string) *Room {
@@ -55,6 +61,9 @@ func (r *Room) Run() {
 }
 
 func (r *Room) registerClient(client *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if r.Clients == nil {
 		r.Clients = make(map[string]*Client)
 	}
@@ -64,6 +73,9 @@ func (r *Room) registerClient(client *Client) {
 }
 
 func (r *Room) unregisterClient(client *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if room, ok := r.Clients[client.ID]; ok {
 		delete(r.Clients, client.ID)
 		close(room.Send)
@@ -76,6 +88,10 @@ func (r *Room) unregisterClient(client *Client) {
 }
 
 func (r *Room) broadcastMessage(message []Message) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+
 	if client, ok := r.Clients[client.ID].Send; ok {
 		for _, client := range r.Clients {
 			select {
@@ -86,3 +102,11 @@ func (r *Room) broadcastMessage(message []Message) {
 		}
 	}
 }
+
+// GetRoomClients returns the number of clients currently connected to the room
+func (r *Room) GetRoomClients(roomId string) int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return len(r.Clients)
+} 

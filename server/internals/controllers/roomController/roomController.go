@@ -2,6 +2,7 @@ package roomController
 
 import (
 	"context"
+	"crypto/des"
 	"errors"
 	"net/http"
 	"time"
@@ -24,6 +25,8 @@ func CreateRoom() gin.HandlerFunc {
 
 		var body struct {
 			title string 
+			description string
+			isPublic bool
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {

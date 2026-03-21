@@ -24,6 +24,10 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 		}
 
 		roomId := c.Param("roomId")
+		if roomId == "" {
+			c.JSON(400, gin.H{"error": "Room ID is required"})
+			return
+		}
 		var roomState interface{}
 
 		err := database.Pool.QueryRow(c.Request.Context(),
@@ -55,14 +59,7 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-
-		client := &Client{
-			ID: userId,
-			Conn: conn,
-			RoomID: roomId,
-			Send: make(chan []Message, 256),
-		}
-
+		client := NewClient(conn, userId, roomId, hub)
 		room.Register <- client
 
 		go client.WritePump()
