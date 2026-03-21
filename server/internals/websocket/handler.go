@@ -60,7 +60,7 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 			ID: userId,
 			Conn: conn,
 			RoomID: roomId,
-			Send: make(chan []byte, 256),
+			Send: make(chan []Message, 256),
 		}
 
 		room.Register <- client
