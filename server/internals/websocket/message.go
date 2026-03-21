@@ -6,12 +6,12 @@ import (
 )
 
 type Message struct {
-	RoomId  string  `json:"roomId"`
-	Type    string  `json:"type"`
-	UserId  string  `json:"userId"`
+	RoomId  string          `json:"roomId"`
+	Type    string          `json:"type"`
+	UserId  string          `json:"userId"`
 	Content json.RawMessage `json:"content"`
-	Version int     `json:"version"`
-	SentAt  int64   `json:"sentAt"`
+	Version int             `json:"version"`
+	SentAt  int64           `json:"sentAt"`
 }
 
 func NewMessage(roomId, userId, msgType string, content interface{}, version int) *Message {

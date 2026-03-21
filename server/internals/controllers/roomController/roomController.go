@@ -2,7 +2,6 @@ package roomController
 
 import (
 	"context"
-	"crypto/des"
 	"errors"
 	"net/http"
 	"time"
@@ -24,9 +23,9 @@ func CreateRoom() gin.HandlerFunc {
 		}
 
 		var body struct {
-			title string 
-			description string
-			isPublic bool
+			Title       string `json:"title" binding:"required"`
+			Description string `json:"description"`
+			IsPublic    bool   `json:"isPublic"`
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -45,20 +44,24 @@ func CreateRoom() gin.HandlerFunc {
 
 		// create room
 		err = tx.QueryRow(ctx,
-			"INSERT INTO rooms (owner_id, title) VALUES ($1, $2) RETURNING id",
+			"INSERT INTO rooms (owner_id, title, description, is_public, version) VALUES ($1, $2, $3, $4, $5) RETURNING id",
 			userId,
-			body.title,
+			body.Title,
+			body.Description,
+			body.IsPublic,
+			0,
 		).Scan(&roomId)
 		if err != nil {
 			c.JSON(500, gin.H{"message": "Failed to create room"})
 			return
 		}
 
+		// initialize room state
 		_, err = tx.Exec(ctx,
-		`INSERT INTO room_state (room_id, state)
-		VALUES ($1, '{}'::jsonb)
-		ON CONFLICT (room_id) DO NOTHING`,
-		roomId,
+			`INSERT INTO room_state (room_id, state)
+			VALUES ($1, '{}'::jsonb)
+			ON CONFLICT (room_id) DO NOTHING`,
+			roomId,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -71,10 +74,10 @@ func CreateRoom() gin.HandlerFunc {
 		// add owner as member
 		_, err = tx.Exec(ctx,
 			"INSERT INTO room_member (room_id, user_id, role) VALUES ($1, $2, $3)",
-			roomId, userId, "owner",
+			roomId, userId, "admin",
 		)
 		if err != nil {
-			c.JSON(500, gin.H{"message": "Failed to add Owner", "details": err.Error(),})
+			c.JSON(500, gin.H{"message": "Failed to add owner", "details": err.Error()})
 			return
 		}
 
@@ -84,13 +87,12 @@ func CreateRoom() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(200, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"message": "Room created successfully",
-			"roomId": roomId,
+			"roomId":  roomId,
 		})
 	}
 }
-
 
 func DeleteRoom() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -113,7 +115,7 @@ func DeleteRoom() gin.HandlerFunc {
 
 		err := database.Pool.QueryRow(ctx, "SELECT owner_id FROM rooms WHERE id = $1", roomId).Scan(&ownerID)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) { // or sql.ErrNoRows
+			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(404, gin.H{"message": "Room not found"})
 				return
 			}
@@ -126,13 +128,11 @@ func DeleteRoom() gin.HandlerFunc {
 			return
 		}
 
-		// If we got here, they ARE the owner. Now delete.
 		_, err = database.Pool.Exec(ctx, "DELETE FROM rooms WHERE id = $1", roomId)
 		if err != nil {
 			c.JSON(500, gin.H{"message": "Failed to delete room"})
 			return
 		}
-
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Room deleted successfully",

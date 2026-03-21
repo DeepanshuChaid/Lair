@@ -16,7 +16,6 @@ var upgrader = websocket.Upgrader{
 
 func ServerWs(hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		userId := c.GetString("userId")
 		if userId == "" {
 			c.JSON(401, gin.H{"error": "Unauthorized"})
@@ -28,15 +27,17 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "Room ID is required"})
 			return
 		}
-		var roomState interface{}
 
+		// Verify room exists
 		err := database.Pool.QueryRow(c.Request.Context(),
-		 "SELECT id FROM rooms WHERE id = $1", roomId).Scan(&roomId)
+			"SELECT id FROM rooms WHERE id = $1", roomId).Scan(&roomId)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Room not found"})
 			return
 		}
 
+		// Get room state from DB
+		var roomState interface{}
 		err = database.Pool.QueryRow(c.Request.Context(),
 			"SELECT state FROM room_state WHERE room_id = $1", roomId).Scan(&roomState)
 		if err != nil {
@@ -44,26 +45,28 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		// Upgrade the HTTP connection to a WebSocket connection
+		// Upgrade connection
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upgrade to WebSocket"})
 			return
 		}
 
+		// Send initial state
 		conn.WriteJSON(roomState)
 
+		// Get or create room
 		room, err := hub.GetRoom(roomId)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Room not found"})
-			return
+			room = NewRoom(roomId, "naam me kya rakha hai", userId)
 		}
 
+		// Create client and register
 		client := NewClient(conn, userId, roomId, hub)
 		room.Register <- client
 
+		// Start pumps
 		go client.WritePump()
 		go client.ReadPump(room)
-		
 	}
 }

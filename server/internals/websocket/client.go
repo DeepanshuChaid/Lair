@@ -15,23 +15,23 @@ const (
 	maxMessageSize = 512 * 1024
 )
 
-type Client struct { 
-	ID string
+type Client struct {
+	ID     string
 	UserId string
 	RoomID string
-	Conn *websocket.Conn
-	hub *Hub
-	Send chan []Message
+	Conn   *websocket.Conn
+	hub    *Hub
+	Send   chan *Message
 }
 
 func NewClient(conn *websocket.Conn, userId, roomId string, hub *Hub) *Client {
 	return &Client{
-		ID: uuid.New().String(),
+		ID:     uuid.New().String(),
 		UserId: userId,
 		RoomID: roomId,
-		Conn: conn,
-		hub: hub,
-		Send: make(chan []Message, 256),
+		Conn:   conn,
+		hub:    hub,
+		Send:   make(chan *Message, 256),
 	}
 }
 
@@ -61,20 +61,21 @@ func (c *Client) ReadPump(room *Room) {
 		message.RoomId = c.RoomID
 		message.UserId = c.UserId
 
-		room.Broadcast <- message
+		// showing error
+		room.Broadcast <- &message
 	}
 }
 
 func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingInterval)
-	defer func ()  {
+	defer func() {
 		ticker.Stop()
 		c.Conn.Close()
 	}()
 
 	for {
 		select {
-		case message, ok := <- c.Send:
+		case message, ok := <-c.Send:
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
@@ -85,7 +86,7 @@ func (c *Client) WritePump() {
 				return
 			}
 
-		case <- ticker.C:
+		case <-ticker.C:
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return

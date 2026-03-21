@@ -59,3 +59,4 @@ CREATE INDEX idx_room_state ON room_state(room_id);
 DROP TABLE IF EXISTS room_state;
 DROP TABLE IF EXISTS room_members;
 DROP TABLE IF EXISTS rooms;
+
