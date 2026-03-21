@@ -9,10 +9,14 @@ import (
 )
 
 const (
+	// the maximum time allowed to write message in a second
 	writeWait      = 10 * time.Second
+	// the maximum time allowed to read message in a second
 	pongWait       = 60 * time.Second
+	// the frequeny at which the server sends ping messages to the client
 	pingInterval   = (pongWait * 9) / 10
-	maxMessageSize = 512 * 1024
+	// the maximum size of a message in bytes
+	maxMessageSize = 1024 * 1024
 )
 
 type Client struct {
@@ -41,6 +45,8 @@ func (c *Client) ReadPump(room *Room) {
 		room.Unregister <- c
 	}()
 
+
+	// SETTING DEADLINES FOR EFFECTIVE WEBSOCKET CONNECTION (TO MYSEFLF YOU DONT NEED TO LEARN THESE)
 	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.Conn.SetReadLimit(maxMessageSize)
 	c.Conn.SetPongHandler(func(string) error {
@@ -49,8 +55,9 @@ func (c *Client) ReadPump(room *Room) {
 	})
 
 	for {
+		// message we are receiving from the client
 		var message Message
-		err := c.Conn.ReadJSON(&message)
+		err := c.Conn.ReadJSON(&message) 
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
@@ -59,7 +66,7 @@ func (c *Client) ReadPump(room *Room) {
 		}
 		log.Printf("RAW MESSAGE: %+v\n", message)
 		
-
+		// adding the room id and user id to the message
 		message.RoomId = c.RoomID
 		message.UserId = c.UserId
 
@@ -78,7 +85,8 @@ func (c *Client) WritePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			// Deadline is like if you fail to comp the task in (eg := 3 days) you are fired!
+			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))	// basically if we are not able to write the messag in 10 seconds we are fired!
 			if !ok {
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
