@@ -27,11 +27,13 @@ const formSchema = z.object({
   title: z
     .string()
     .min(1, "Title is required")
+    .min(3, "Title must be at least 3 characters")
     .max(50, "Title must be less than 50 characters")
     .trim(),
   description: z
     .string()
     .min(1, "Description is required")
+    .min(3, "Description must be at least 3 characters")  
     .max(100, "Description must be less than 100 characters")
     .trim(),
   is_public: z.boolean(),
