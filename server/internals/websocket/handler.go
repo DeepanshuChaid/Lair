@@ -1,12 +1,15 @@
 package websocket
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"time"
-	"encoding/json"
 
 	"github.com/DeepanshuChaid/Lair/internals/database"
+	cache "github.com/DeepanshuChaid/Lair/internals/redis"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -15,6 +18,58 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
+
+
+func VerfiyRoom() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		roomId := c.Param("roomId")
+		if roomId == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
+			return
+		}
+
+		// DATABASE VALIDATION
+		var isPublic bool
+		err := database.Pool.QueryRow(ctx,
+			"SELECT is_public FROM rooms WHERE id = $1", roomId).Scan(&isPublic)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
+			return
+		}
+
+		if !isPublic {
+			c.JSON(http.StatusForbidden, gin.H{"message": "Room is private"})
+			return
+		}
+
+		// UPSERT Member: Only add them if they aren't already there.
+		// "ON CONFLICT DO NOTHING" prevents the 500 error if they refresh.
+		_, err = database.Pool.Exec(ctx,
+			`INSERT INTO room_member (room_id, user_id) 
+			 VALUES ($1, $2) 
+			 ON CONFLICT (room_id, user_id) DO NOTHING`, roomId, userId)
+		
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"message": "Failed to join room", "error": err.Error(),})
+			return
+		}
+
+		ticket := uuid.New().String()
+		cache.Set(ctx, ticket, userId, 5*time.Minute)
+
+		c.JSON(http.StatusOK, gin.H{"message": "Verfied for entering room successfully", "ticket": ticket})
+	}
+}
+
 
 func ServerWs(hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -30,28 +85,20 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		// DATABASE VALIDATION
-		var isPublic bool
-		err := database.Pool.QueryRow(c.Request.Context(),
-			"SELECT is_public FROM rooms WHERE id = $1", roomId).Scan(&isPublic)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
+		ticket := c.Query("ticket")
+		if ticket == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Ticket is required"})
 			return
 		}
 
-		// UPSERT Member: Only add them if they aren't already there.
-		// "ON CONFLICT DO NOTHING" prevents the 500 error if they refresh.
-		_, err = database.Pool.Exec(c.Request.Context(),
-			`INSERT INTO room_member (room_id, user_id) 
-			 VALUES ($1, $2) 
-			 ON CONFLICT (room_id, user_id) DO NOTHING`, roomId, userId)
-		
+		val, err := cache.Get(c.Request.Context(), ticket)
 		if err != nil {
-			if !isPublic {
-				c.JSON(http.StatusForbidden, gin.H{"message": "Room is private"})
-				return
-			}
-			c.JSON(http.StatusForbidden, gin.H{"message": "Failed to join room", "error": err.Error(),})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid ticket"})
+			return
+		}
+
+		if val != userId {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid ticket"})
 			return
 		}
 

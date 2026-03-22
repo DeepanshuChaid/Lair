@@ -77,13 +77,15 @@ func main() {
 	protectedRoutes.GET("/user", authController.GetUser())
 	protectedRoutes.POST("/add/profile-picture", authController.AddProfilePicture())
 
-	// WebSocket route
+	// Room routes
 	protectedRoutes.GET("/room/get", roomController.GetUserRooms())
 	protectedRoutes.POST("/room/create", roomController.CreateRoom())
 	protectedRoutes.DELETE("/room/delete/:id", roomController.DeleteRoom())
 	protectedRoutes.PUT("/room/update/:id", roomController.UpdateRoom())
 	protectedRoutes.POST("/room/uploadthumbnail/:id", roomController.UpdateRoomThumbnail())
 
+	// webscocket route
+	protectedRoutes.GET("/ws/verify/:roomId", websocket.VerfiyRoom())
 	protectedRoutes.GET("/ws/:roomId", websocket.ServerWs(hub))
 
 	router.Run(":" + PORT)
