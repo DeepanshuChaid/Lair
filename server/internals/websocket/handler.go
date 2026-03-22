@@ -115,21 +115,34 @@ func VerfiyRoom() gin.HandlerFunc {
 			return
 		}
 
-		// DATABASE VALIDATION
+		// // DATABASE VALIDATION
 		var isPublic bool
-		err := database.Pool.QueryRow(ctx,
-			"SELECT is_public FROM rooms WHERE id = $1", roomId).Scan(&isPublic)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
-			return
-		}
+		// err := database.Pool.QueryRow(ctx,
+		// 	"SELECT is_public FROM rooms WHERE id = $1", roomId).Scan(&isPublic)
+		// if err != nil {
+		// 	c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
+		// 	return
+		// }
 
-		// check if user is member of room
+		// // check if user is member of room
 		var isMember bool
-		err = database.Pool.QueryRow(ctx,
-			"SELECT EXISTS(SELECT 1 FROM room_member WHERE room_id = $1 AND user_id = $2)", roomId, userId).Scan(&isMember)
+		// err = database.Pool.QueryRow(ctx,
+		// 	"SELECT EXISTS(SELECT 1 FROM room_member WHERE room_id = $1 AND user_id = $2)", roomId, userId).Scan(&isMember)
+		// if err != nil {
+		// 	c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+		// 	return
+		// }
+
+		err := database.Pool.QueryRow(
+			ctx,
+			`SELECT 
+				is_public, 
+				EXISTS(SELECT 1 FROM room_member WHERE room_id = $1 AND user_id = $2) as is_member 
+			FROM rooms WHERE id = $1`,
+			roomId, userId,
+		).Scan(&isPublic, &isMember)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error", "details": err.Error()})
 			return
 		}
 

@@ -113,7 +113,7 @@ func CreateRoom() gin.HandlerFunc {
 		var body struct {
 			Title       string `json:"title" binding:"required" validate:"required,min=3,max=50"`
 			Description string `json:"description" validate:"required,min=3,max=100"`
-			IsPublic    bool   `json:"is_public" validate:"required"`
+			IsPublic    bool   `json:"is_public"`
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
