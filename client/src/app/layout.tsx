@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import Providers from "../providers/providers";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/providers/auth-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
 
@@ -38,7 +39,9 @@ export default function RootLayout({
         <Providers>
           <AuthProvider>
             <Toaster />
-            {children}
+            <TooltipProvider>
+            { children}
+            </TooltipProvider>
           </AuthProvider>
         </Providers>
       </body>

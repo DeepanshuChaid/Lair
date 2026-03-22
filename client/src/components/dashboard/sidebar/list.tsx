@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import API from "@/lib/axios";
+import Item from "./item";
 
 export default function List() {
     const { data, isLoading, error } = useQuery({
@@ -27,9 +28,12 @@ export default function List() {
     return (
         <div>
             {data?.rooms?.map((room: any) => (
-                <div key={room.id}>
-                    <h2>{room.title}</h2>
-                </div>
+                <Item 
+                    key={room.id}
+                    id={room.id}
+                    name={room.title}
+                    imageUrl={room.thumbnail}
+                />
             ))}
         </div>
     )
