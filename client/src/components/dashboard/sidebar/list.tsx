@@ -26,7 +26,7 @@ export default function List() {
     }
     
     return (
-        <div>
+        <div className="space-y-2">
             {data?.rooms?.map((room: any) => (
                 <Item 
                     key={room.id}

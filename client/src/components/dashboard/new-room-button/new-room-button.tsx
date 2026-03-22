@@ -22,6 +22,7 @@ import { useMutation } from "@tanstack/react-query";
 import API from "@/lib/axios";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import Hint from "../sidebar/hint";
 
 const formSchema = z.object({
   title: z
@@ -94,11 +95,13 @@ export default function NewRoomButton() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <div className="aspect-square">
-          <button className="bg-white/25 h-full w-full rounded-md flex items-center justify-center opacity-60 hover:opacity-100 transition">
-            <Plus className="text-white" />
-          </button>
-        </div>
+        <Hint label="Create Room" side="right" align="center" sideOffset={10} alignOffset={0} >
+          <div className="aspect-square">
+            <button className="bg-white/25 h-full w-full rounded-md flex items-center justify-center opacity-60 hover:opacity-100 transition">
+              <Plus className="text-white" />
+            </button>
+          </div>
+        </Hint>
       </DialogTrigger>
 
       <DialogContent className="p-6 max-w-[480px]">
