@@ -52,10 +52,10 @@ export const RoomCard = ({ room }: { room: Room }) => {
     <div className="group flex flex-col bg-white rounded-[12px] border border-[#E5E5E5] overflow-hidden hover:shadow-sm transition-all cursor-pointer">
       {/* Thumbnail Area (16:9) */}
       <div className="relative aspect-video bg-[#FAFAFA] border-b border-[#E5E5E5] overflow-hidden">
-        {room.thumbnail_url ? (
+        {room.thumbnail ? (
           <img 
-            src={room.thumbnail_url} 
-            alt={room.name} 
+            src={room.thumbnail} 
+            alt={room.title} 
             className="w-full h-full object-cover"
           />
         ) : (

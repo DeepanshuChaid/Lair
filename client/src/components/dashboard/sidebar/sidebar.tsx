@@ -54,7 +54,7 @@ export const Sidebar = () => {
           )}
           <div className="flex flex-col overflow-hidden">
             <span className="text-[14px] font-medium text-[#171717] truncate">
-              {user?.display_name || user?.name || "User"}
+              {user?.name || "User"}
             </span>
             <span className="text-[12px] text-[#737373] truncate">
               {user?.email || "user@example.com"}
