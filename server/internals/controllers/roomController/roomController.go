@@ -15,8 +15,11 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2/api"
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5"
 )
+
+var validate = validator.New()
 
 // ==================================== //
 //
@@ -108,12 +111,17 @@ func CreateRoom() gin.HandlerFunc {
 		}
 
 		var body struct {
-			Title       string `json:"title" binding:"required"`
-			Description string `json:"description"`
-			IsPublic    bool   `json:"isPublic"`
+			Title       string `json:"title" binding:"required" validate:"required, min=3, max=50"`
+			Description string `json:"description" validate:"required, min=3, max=100"`
+			IsPublic    bool   `json:"isPublic" validate:"required"`
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"message": "Invalid request body"})
+			return
+		}
+
+		if err := validate.Struct(body); err != nil {
 			c.JSON(400, gin.H{"message": "Invalid request body"})
 			return
 		}
