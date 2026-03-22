@@ -9,6 +9,7 @@ import (
 	"github.com/DeepanshuChaid/Lair/internals/database"
 	cache "github.com/DeepanshuChaid/Lair/internals/redis"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -19,10 +20,87 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+var validate = validator.New()
+
+func AddMember() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		var body struct {
+			Email string `json:"email" validate:"required,email"`
+		}
+
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+			return
+		}
+
+		if err := validate.Struct(body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+			return
+		}
+
+		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		roomId := c.Param("roomId")
+		if roomId == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
+			return
+		}
+
+		var OwnerId string
+		err := database.Pool.QueryRow(
+			ctx,
+			"SELECT owner_id FROM rooms WHERE id = $1",
+			roomId,
+		).Scan(&OwnerId)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error", "details": err.Error()})
+			return
+		}
+
+		if OwnerId != userId {
+			c.JSON(http.StatusForbidden, gin.H{"message": "You are not the owner of this room"})
+			return
+		}
+
+		var targetUserId string
+		err = database.Pool.QueryRow(
+			ctx,
+			"SELECT id FROM users WHERE email = $1",
+			body.Email,
+		).Scan(&targetUserId)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
+			return
+		}
+
+		// UPSERT Member: Only add them if they aren't already there.
+		// "ON CONFLICT DO NOTHING" prevents the 500 error if they refresh.
+		_, err = database.Pool.Exec(ctx,
+			`INSERT INTO room_member (room_id, user_id) 
+			 VALUES ($1, $2) 
+			 ON CONFLICT (room_id, user_id) DO NOTHING`, roomId, targetUserId,)
+		
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"message": "Failed to join room", "error": err.Error(),})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Member added successfully"})
+	}
+}
+
 
 func VerfiyRoom() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
 		userId := c.GetString("userId")

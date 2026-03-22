@@ -85,6 +85,7 @@ func main() {
 	protectedRoutes.POST("/room/uploadthumbnail/:id", roomController.UpdateRoomThumbnail())
 
 	// webscocket route
+	protectedRoutes.POST("/ws/add-member/:roomId", websocket.AddMember())
 	protectedRoutes.GET("/ws/verify/:roomId", websocket.VerfiyRoom())
 	protectedRoutes.GET("/ws/:roomId", websocket.ServerWs(hub))
 

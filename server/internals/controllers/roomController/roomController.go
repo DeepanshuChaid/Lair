@@ -111,13 +111,13 @@ func CreateRoom() gin.HandlerFunc {
 		}
 
 		var body struct {
-			Title       string `json:"title" binding:"required" validate:"required, min=3, max=50"`
-			Description string `json:"description" validate:"required, min=3, max=100"`
-			IsPublic    bool   `json:"isPublic" validate:"required"`
+			Title       string `json:"title" binding:"required" validate:"required,min=3,max=50"`
+			Description string `json:"description" validate:"required,min=3,max=100"`
+			IsPublic    bool   `json:"is_public" validate:"required"`
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
-			c.JSON(400, gin.H{"message": "Invalid request body"})
+			c.JSON(400, gin.H{"message": "Invalid request body", "details": err.Error()})
 			return
 		}
 
@@ -137,12 +137,11 @@ func CreateRoom() gin.HandlerFunc {
 
 		// create room
 		err = tx.QueryRow(ctx,
-			"INSERT INTO rooms (owner_id, title, description, is_public, version) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+			"INSERT INTO rooms (owner_id, title, description, is_public) VALUES ($1, $2, $3, $4) RETURNING id",
 			userId,
 			body.Title,
 			body.Description,
 			body.IsPublic,
-			0,
 		).Scan(&roomId)
 		if err != nil {
 			c.JSON(500, gin.H{"message": "Failed to create room"})
@@ -166,8 +165,8 @@ func CreateRoom() gin.HandlerFunc {
 
 		// add owner as member
 		_, err = tx.Exec(ctx,
-			"INSERT INTO room_member (room_id, user_id, role) VALUES ($1, $2, $3)",
-			roomId, userId, "admin",
+			"INSERT INTO room_member (room_id, user_id) VALUES ($1, $2)",
+			roomId, userId,
 		)
 		if err != nil {
 			c.JSON(500, gin.H{"message": "Failed to add owner", "details": err.Error()})
