@@ -97,6 +97,83 @@ func AddMember() gin.HandlerFunc {
 	}
 }
 
+func RemoveMember() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		var body struct {
+			Email string `json:"email" validate:"required,email"`
+		}
+
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+			return
+		}
+
+		if err := validate.Struct(body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+			return	
+		}
+
+		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		roomId := c.Param("roomId")
+		if roomId == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
+			return
+		}
+
+		var OwnerId string
+		err := database.Pool.QueryRow(
+			ctx,
+			"SELECT owner_id FROM rooms WHERE id = $1",
+			roomId,
+		).Scan(&OwnerId)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error", "details": err.Error()})
+			return
+		}
+
+		if OwnerId != userId {
+			c.JSON(http.StatusForbidden, gin.H{"message": "You are not the owner of this room"})
+			return
+		}
+
+		var targetUserId string
+		err = database.Pool.QueryRow(
+			ctx,
+			"SELECT id FROM users WHERE email = $1",
+			body.Email,
+		).Scan(&targetUserId)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
+			return
+		}
+
+		if targetUserId == userId {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "You cannot remove yourself as the owner"})
+			return
+		}
+
+		_, err = database.Pool.Exec(ctx,
+			"DELETE FROM room_member WHERE room_id = $1 AND user_id = $2", 
+			roomId, targetUserId,
+		)
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"message": "Failed to remove member", "error": err.Error(),})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Member removed successfully"})
+	}
+}
+
 
 func VerfiyRoom() gin.HandlerFunc {
 	return func(c *gin.Context) {
