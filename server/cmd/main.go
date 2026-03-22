@@ -44,7 +44,7 @@ func main() {
 
 	// Initialize WebSocket hub
 	hub := websocket.NewHub()
-	go hub.Run()
+	go hub.Run() // background goruntines bascically background functions running on diff thread
 
 	PORT := os.Getenv("PORT")
 
@@ -86,6 +86,7 @@ func main() {
 
 	// webscocket route
 	protectedRoutes.POST("/ws/add-member/:roomId", websocket.AddMember())
+	protectedRoutes.DELETE("/ws/remove-member/:roomId", websocket.RemoveMember(hub))
 	protectedRoutes.GET("/ws/verify/:roomId", websocket.VerfiyRoom())
 	protectedRoutes.GET("/ws/:roomId", websocket.ServerWs(hub))
 

@@ -97,7 +97,7 @@ func AddMember() gin.HandlerFunc {
 	}
 }
 
-func RemoveMember() gin.HandlerFunc {
+func RemoveMember(hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -169,6 +169,14 @@ func RemoveMember() gin.HandlerFunc {
 			c.JSON(http.StatusForbidden, gin.H{"message": "Failed to remove member", "error": err.Error(),})
 			return
 		}
+
+		room, err := hub.GetRoom(roomId)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
+			return
+		}
+
+		room.Kick <- &targetUserId
 
 		c.JSON(http.StatusOK, gin.H{"message": "Member removed successfully"})
 	}

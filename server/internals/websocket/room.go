@@ -20,9 +20,12 @@ type Room struct {
 	Unregister chan *Client
 	Broadcast  chan *Message
 
+	Kick chan *string
+
 	// mu is used to synchronize access to the Clients map and State
-	mu         sync.RWMutex
+	mu sync.RWMutex
 }
+
 
 func NewRoom(id, name, ownerID string) *Room {
 	return &Room{
@@ -34,6 +37,8 @@ func NewRoom(id, name, ownerID string) *Room {
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
 		Broadcast:  make(chan *Message),
+
+		Kick: make(chan *string),
 	}
 }
 
@@ -48,6 +53,9 @@ func (r *Room) Run() {
 
 		case message := <-r.Broadcast:
 			r.broadcastMessage(message)
+
+		case req := <-r.Kick:
+			r.kickClient(req)
 		}
 	}
 }
@@ -71,8 +79,8 @@ func (r *Room) unregisterClient(client *Client) {
 
 	if _, ok := r.Clients[client.ID]; ok {
 		delete(r.Clients, client.ID)
-		// here the chan is closed no further messages can be sent to the channel 
-		// this is done so that the write pump is terminated 
+		// here the chan is closed no further messages can be sent to the channel
+		// this is done so that the write pump is terminated
 		close(client.Send)
 		log.Println("Client unregistered:", client.ID)
 
@@ -81,7 +89,6 @@ func (r *Room) unregisterClient(client *Client) {
 		}
 	}
 }
-
 
 func (r *Room) broadcastMessage(message *Message) {
 	r.mu.RLock()
@@ -94,6 +101,19 @@ func (r *Room) broadcastMessage(message *Message) {
 			log.Printf("Failed to send message to client %s, closing connection", client.ID)
 		}
 	}
+}
+
+func (r *Room) kickClient(req *string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	client, ok := r.Clients[*req]
+	if !ok {
+		return
+	}
+	delete(r.Clients, *req)
+	close(client.Send)
+	log.Println("Client kicked:", *req)
 }
 
 // GetRoomClients returns the number of clients currently connected to the room
