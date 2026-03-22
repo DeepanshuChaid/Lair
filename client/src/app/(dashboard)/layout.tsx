@@ -1,26 +1,23 @@
-import Navbar from "@/components/dashboard/navbar/navbar"
-import OrgSidebar from "@/components/dashboard/org-sidebar/org-sidebar"
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { Sidebar } from "@/components/dashboard/sidebar/sidebar"
+import { MobileSidebar } from "@/components/dashboard/sidebar/mobile-sidebar"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main className="h-screen flex w-full">
-      {/* Primary sidebar */}
-      <Sidebar />
+    <main className="h-screen flex w-full bg-[#FAFAFA]">
+      {/* Desktop Sidebar */}
+      <div className="hidden md:flex h-full w-64 flex-col fixed inset-y-0 z-50">
+        <Sidebar />
+      </div>
 
-      {/* Secondary sidebar + content */}
-      <div className="pl-[60px] h-full w-full">
-        <div className="flex gap-x-3 h-full w-full">
-
-        <OrgSidebar />
-
-        {/* Main content area */}
-        <div className="flex flex-col flex-1 w-full">
-          <Navbar />
-            {children}
+      {/* Main Content */}
+      <div className="md:pl-64 h-full w-full flex flex-col">
+        {/* Mobile Header with Sidebar Trigger */}
+        <div className="md:hidden flex items-center p-4 border-b border-[#E5E5E5] bg-white">
+          <MobileSidebar />
         </div>
-
-
+        
+        <div className="flex-1 w-full overflow-y-auto">
+          {children}
         </div>
       </div>
     </main>

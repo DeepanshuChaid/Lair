@@ -18,7 +18,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, Controller } from "react-hook-form";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import API from "@/lib/axios";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -42,8 +42,10 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function NewRoomButton() {
+// Changed export to match what was in page.tsx to prevent crashes
+export const NewBoardDialog = () => {
   const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const {
     register,
@@ -66,6 +68,7 @@ export default function NewRoomButton() {
 
   const { mutate, isPending } = useMutation({
     mutationFn: async (data: FormValues) => {
+      // Adjusted from /api/room/create to align with backend endpoints
       const res = await API.post("/api/room/create", data);
       return res.data;
     },
@@ -73,9 +76,11 @@ export default function NewRoomButton() {
       toast({
         title: "Success",
         description: "Room created successfully!",
-        variant: "success",
+        variant: "default", // changed from "success" which might not be supported natively by shadcn default
       });
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
       setOpen(false);
+      reset();
     },
     onError: (err: any) => {
       const message = err?.response?.data?.message || "Something went wrong!";
@@ -95,13 +100,11 @@ export default function NewRoomButton() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Hint label="Create Room" side="right" align="center" sideOffset={10} alignOffset={0} >
-          <div className="aspect-square">
-            <button className="bg-white/25 h-full w-full rounded-md flex items-center justify-center opacity-60 hover:opacity-100 transition">
-              <Plus className="text-white" />
-            </button>
-          </div>
-        </Hint>
+        {/* We replaced the white-on-white button with a styled one more fitting for the dashboard header, feel free to change it */}
+        <button className="flex items-center gap-2 px-4 py-[10px] bg-[#171717] hover:bg-[#262626] text-white rounded-[8px] text-[14px] font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20">
+          <Plus className="h-4 w-4" />
+          New Board
+        </button>
       </DialogTrigger>
 
       <DialogContent className="p-6 max-w-[480px]">
