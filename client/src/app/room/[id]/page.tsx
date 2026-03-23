@@ -8,6 +8,7 @@ import "@tldraw/tldraw/tldraw.css";
 
 function Board({ boardId }: { boardId: string }) {
   // Pass the boardId down to a store/websocket integration later
+
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-neutral-100 touch-none"
