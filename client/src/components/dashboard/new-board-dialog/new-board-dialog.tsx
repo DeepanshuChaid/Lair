@@ -76,7 +76,7 @@ export const NewBoardDialog = () => {
       toast({
         title: "Success",
         description: "Room created successfully!",
-        variant: "default", // changed from "success" which might not be supported natively by shadcn default
+        variant: "success", // changed from "success" which might not be supported natively by shadcn default
       });
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
       setOpen(false);

@@ -1,21 +1,59 @@
 "use client"
 
 import { useState } from "react"
-import { MoreVertical, Settings, Trash2 } from "lucide-react"
+import { MoreVertical, Trash2, Globe, Lock, UserPlus, Loader } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+
 import API from "@/lib/axios"
 import { Room } from "@/app/(dashboard)/page"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { toast } from "@/hooks/use-toast"
+
+// --- 1. Define the Schema ---
+const inviteSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Email is required")
+    .email("Please enter a valid email address"),
+})
+
+type InviteFormValues = z.infer<typeof inviteSchema>
 
 export const RoomCard = ({ room }: { room: Room }) => {
   const queryClient = useQueryClient()
   const [isDeleting, setIsDeleting] = useState(false)
+  const [memberDialogOpen, setMemberDialogOpen] = useState(false)
+
+  // --- 2. Initialize Form ---
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<InviteFormValues>({
+    resolver: zodResolver(inviteSchema),
+    defaultValues: { email: "" },
+  })
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -23,93 +61,175 @@ export const RoomCard = ({ room }: { room: Room }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rooms"] })
+      toast({ title: "Success", description: "Room deleted successfully", variant: "success" })
     },
   })
 
-  // Format "Created [Time ago]"
+  const addMemberMutation = useMutation({
+    mutationFn: async (data: InviteFormValues) => {
+      const res = await API.post(`/api/ws/add-member/${room.id}`, data)
+      return res.data
+    },
+    onSuccess: (_, variables) => {
+      toast({ 
+        title: "Invited!", 
+        description: `${variables.email} Added to the Room`, 
+        variant: "success" 
+      })
+      setMemberDialogOpen(false)
+      reset() // Reset form after success
+    },
+    onError: (err: any) => {
+      toast({ 
+        title: "Error", 
+        description: err?.response?.data?.message || "Failed to add member", 
+        variant: "destructive" 
+      })
+    }
+  })
+
   const getRelativeTime = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-    
     if (diffInSeconds < 60) return "just now"
     const diffInMinutes = Math.floor(diffInSeconds / 60)
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`
     const diffInHours = Math.floor(diffInMinutes / 60)
     if (diffInHours < 24) return `${diffInHours}h ago`
-    const diffInDays = Math.floor(diffInHours / 24)
-    return `${diffInDays}d ago`
+    return `${Math.floor(diffInHours / 24)}d ago`
   }
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!confirm("Are you sure?")) return
     setIsDeleting(true)
     await deleteMutation.mutateAsync()
     setIsDeleting(false)
   }
 
+  // --- 3. Handle Form Submission ---
+  const onSubmit = (data: InviteFormValues) => {
+    addMemberMutation.mutate(data)
+  }
+
   return (
-    <div className="group flex flex-col bg-white rounded-[12px] border border-[#E5E5E5] overflow-hidden hover:shadow-sm transition-all cursor-pointer">
-      {/* Thumbnail Area (16:9) */}
-      <div className="relative aspect-video bg-[#FAFAFA] border-b border-[#E5E5E5] overflow-hidden">
-        {room.thumbnail ? (
-          <img 
-            src={room.thumbnail} 
-            alt={room.title} 
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center opacity-30">
-            {/* Geometric pattern fallback */}
-            <svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-              <g fill="none" fillRule="evenodd">
-                <g fill="#171717" fillOpacity="0.2">
-                  <path d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/>
-                </g>
-              </g>
-            </svg>
+    <>
+      <div className="group flex flex-col bg-white rounded-[12px] border border-[#E5E5E5] overflow-hidden hover:shadow-md transition-all cursor-pointer">
+        <div className="relative aspect-video bg-[#FAFAFA] border-b border-[#E5E5E5] overflow-hidden">
+          {room.thumbnail ? (
+            <img src={room.thumbnail} alt={room.title} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center opacity-20 bg-slate-100">
+              <Globe size={48} className="text-slate-400" />
+            </div>
+          )}
+
+          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/90 backdrop-blur-sm border border-[#E5E5E5] shadow-sm">
+            {room.is_public ? <Globe size={12} className="text-blue-600" /> : <Lock size={12} className="text-gray-600" />}
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#171717]">
+              {room.is_public ? "Public" : "Private"}
+            </span>
           </div>
-        )}
-        
-        {/* Placeholder for API reserved upload area */}
-        <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity">
-           {/* Add your upload logic using POST /api/room/uploadthumbnail/:id here */}
+        </div>
+
+        <div className="flex flex-col p-4 gap-3">
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col overflow-hidden">
+              <h3 className="text-[#171717] font-semibold text-[15px] truncate leading-tight">{room.title}</h3>
+              <p className="text-[#737373] text-[12px] line-clamp-1 mt-1">{room.description}</p>
+            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-[#737373] hover:bg-[#FAFAFA]" disabled={isDeleting}>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[180px]">
+                <DropdownMenuItem 
+                  className="gap-2 cursor-pointer" 
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMemberDialogOpen(true)
+                  }}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Add Member
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600 cursor-pointer" onClick={handleDelete}>
+                  <Trash2 className="h-4 w-4" />
+                  Delete Room
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="flex items-center justify-between mt-auto pt-2 border-t border-[#F5F5F5]">
+            <span className="text-[#A3A3A3] text-[11px] font-medium">
+              Created {getRelativeTime(room.created_at)}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Bottom Information */}
-      <div className="flex items-center justify-between p-4">
-        <div className="flex flex-col overflow-hidden">
-          <h3 className="text-[#171717] font-medium text-[14px] truncate leading-tight mb-1">
-            {room.title}
-          </h3>
-          <span className="text-[#737373] text-[12px]">
-            Created {getRelativeTime(room.created_at)}
-          </span>
-        </div>
+      {/* --- ADD MEMBER DIALOG --- */}
+      <Dialog 
+        open={memberDialogOpen} 
+        onOpenChange={(open) => {
+          setMemberDialogOpen(open)
+          if (!open) reset() // Clear errors and input when closing
+        }}
+      >
+        <DialogContent className="sm:max-w-[425px]" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Add Member</DialogTitle>
+            <DialogDescription>
+              Invite someone to <span className="font-semibold text-[#171717]">"{room.title}"</span> by their email address.
+            </DialogDescription>
+          </DialogHeader>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-[#737373] hover:text-[#171717] hover:bg-[#FAFAFA] focus-visible:ring-0 focus-visible:ring-offset-0"
-              disabled={isDeleting}
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[160px] bg-white rounded-[8px] border-[#E5E5E5] p-1 shadow-sm">
-            <DropdownMenuItem 
-              className="flex items-center gap-2 text-[13px] text-red-600 hover:bg-red-50 cursor-pointer rounded-[6px] focus:text-red-600"
-              onClick={handleDelete}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
+          {/* Form with React Hook Form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className={errors.email ? "text-red-500" : ""}>Email Address</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="colleague@example.com"
+                {...register("email")}
+                className={errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}
+                autoFocus
+              />
+              {errors.email && (
+                <p className="text-red-500 text-xs font-medium">{errors.email.message}</p>
+              )}
+            </div>
+            
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setMemberDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={addMemberMutation.isPending}
+                className="bg-[#171717] hover:bg-[#262626] min-w-[100px]"
+              >
+                {addMemberMutation.isPending ? (
+                  <Loader className="animate-spin h-4 w-4" />
+                ) : (
+                  "Send Invite"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

@@ -31,7 +31,7 @@ export default function DashboardPage() {
         <div className="flex-1 h-full p-6 max-w-7xl mx-auto flex flex-col gap-6">
             {/* Header */}
             <div className="flex items-center justify-between sticky top-0 bg-[#FAFAFA] z-10 py-2">
-                <h1 className="text-[#171717] font-mono text-xl font-medium tracking-tight">
+                <h1 className="text-[#171717] font-mono text-48 font-medium tracking-tight">
                     Dashboard
                 </h1>
                 <NewBoardDialog />

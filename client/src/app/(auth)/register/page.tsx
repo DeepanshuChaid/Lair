@@ -81,12 +81,12 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="flex flex-col justify-center items-center gap-6 min-h-svh px-4 py-12 bg-[#FAFAFA]">
+    <div className="flex flex-col justify-center items-center gap-6 min-h-svh h-full px-4 py-12 bg-[#FAFAFA]">
       <div className="flex w-full flex-col gap-8 justify-center items-center">
         {/* LOGO */}
-        <Link href="/" className="flex item-center self-center">
-          <Image src="/Logo.png" alt="logo" height={40} width={104} className="h-[40px] w-auto grayscale" />
-        </Link>
+        {/* <Link href="/" className="flex item-center self-center"> */}
+          <Image src="/logo-icon.png" alt="logo" height={40} width={104} className="h-[40px] w-auto" />
+        {/* </Link> */}
 
         <div className="flex flex-col justify-center items-center p-8 gap-8 w-full bg-white border border-[#E5E5E5] rounded-[16px] shadow-sm max-w-[500px]">
           {/* HEADING */}
@@ -111,7 +111,7 @@ export default function SignUpPage() {
 
           {/* FORM */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5 w-full">
-            
+
             {/* Name Field */}
             <div className="flex flex-col gap-2">
               <label htmlFor="name" className={`font-semibold text-[14px] ${errors.name ? "text-red-500" : "text-[#404040]"}`}>
@@ -202,7 +202,7 @@ export default function SignUpPage() {
           </div>
         </div>
       </div>
-      
+
       <div className="text-12 text-center text-[#A3A3A3] max-w-[320px]">
         By clicking continue, you agree to our{" "}
         <a href="#" className="underline">Terms of Service</a> and <a href="#" className="underline">Privacy Policy</a>.

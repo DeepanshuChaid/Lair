@@ -2,9 +2,10 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import API from "@/lib/axios"
 import { toast } from "@/hooks/use-toast"
+import { useRouter } from "next/navigation"
 
 type User = {
   id: string
@@ -22,39 +23,34 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
   const queryClient = useQueryClient()
 
-  const fetchUser = async () => {
-    try {
-      setLoading(true)
-      const { data } = await API.get("/api/user") // your endpoint
-      setUser(data.user)
-    //   toast({
-    //     title: "Success",
-    //     description: JSON.stringify(data.user.profile_picture),
-    //     variant: "success",
-    //   });
-    } catch {
-      setUser(null)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const router = useRouter()
 
+  const { data: user, isLoading } = useQuery({
+    queryKey: ["authUser"],
+    queryFn: async () => {
+      const { data } = await API.get("/api/user")
+      return data.user
+    },
+  })
+
+
+  // 2. Move the navigation into a side effect
   useEffect(() => {
-    fetchUser()
-  }, [])
+    if (!isLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, isLoading, router]);
+
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        loading,
+        user: user,
+        loading: isLoading,
         refetchUser: () => {
           queryClient.invalidateQueries({ queryKey: ["authUser"] })
-          fetchUser()
         },
       }}
     >
