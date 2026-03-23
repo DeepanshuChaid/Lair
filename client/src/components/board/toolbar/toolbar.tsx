@@ -1,51 +1,80 @@
 "use client"
 
 import { ToolButton } from "../tool-button/tool-button";
-import { MousePointer, Pencil, Eraser, Square, Circle, Type, Undo, Redo, Trash, Text } from "lucide-react";
+import { MousePointer, Pencil, Eraser, Circle, Type, Undo, Redo, StickyNote } from "lucide-react";
 
-export default function Toolbar () {
+type canvasState = any;
+
+interface ToolbarProps {
+    canvasState: canvasState;
+    setCanvasState: (newState: canvasState) => void;
+    undo: () => void;
+    redo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
+}
+
+export default function Toolbar({
+    canvasState,
+    setCanvasState,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+}: ToolbarProps) {
     return (
-        <div className="absolute top-[50%] -translate-y-[50%] left-2 flex flex-col gap-y-4">
+        <div className="absolute top-[50%] -translate-y-[50%] left-2 flex flex-col gap-y-3">
             <div className="bg-white rounded-md p-1.5 flex gap-y-1 flex-col items-center shadow-md">
                 <ToolButton
                     label="Cursor"
                     icon={MousePointer}
-                    onClick={() => {}}
+                    isActive={canvasState?.mode === "Cursor"}
+                    onClick={() => setCanvasState({ ...canvasState, mode: "Cursor" })}
                 />
                 <ToolButton 
                     label="Pencil"
                     icon={Pencil}
-                    onClick={() => {}}
+                    isActive={canvasState?.mode === "Pencil"}
+                    onClick={() => setCanvasState({ ...canvasState, mode: "Pencil" })}
                 />
                 <ToolButton 
                     label="Eraser"
                     icon={Eraser}
-                    onClick={() => {}}
+                    isActive={canvasState?.mode === "Cursor" && canvasState?.tool === "Eraser"}
+                    // Eraser tool is not implemented yet; keep Cursor active for now.
+                    onClick={() => setCanvasState({ ...canvasState, mode: "Cursor" })}
                 />
                 <ToolButton 
                     label="Circle"
                     icon={Circle}
-                    onClick={() => {}}
+                    isActive={canvasState?.mode === "Circle"}
+                    onClick={() => setCanvasState({ ...canvasState, mode: "Circle" })}
+                />
+                <ToolButton 
+                    label="Sticky Note"
+                    icon={StickyNote}
+                    isActive={canvasState?.mode === "StickyNote"}
+                    onClick={() => setCanvasState({ ...canvasState, mode: "StickyNote" })}
                 />
                 <ToolButton 
                     label="Text"
-                    icon={Text}
-                    onClick={() => {}}
+                    icon={Type}
+                    isActive={canvasState?.mode === "Text"}
+                    onClick={() => setCanvasState({ ...canvasState, mode: "Text" })}
                 />
+            </div>
+            <div className="bg-white rounded-md p-1.5 flex gap-y-1 flex-col items-center shadow-md">
                 <ToolButton 
                     label="Undo"
                     icon={Undo}
-                    onClick={() => {}}
+                    onClick={undo}
+                    isDisabled={!canUndo}
                 />
                 <ToolButton 
                     label="Redo"
                     icon={Redo}
-                    onClick={() => {}}
-                />
-                <ToolButton 
-                    label="Clear"
-                    icon={Trash}
-                    onClick={() => {}}
+                    onClick={redo}
+                    isDisabled={!canRedo}
                 />
             </div>
         </div>
