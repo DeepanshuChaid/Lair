@@ -1,5 +1,7 @@
 // app/dashboard/[id]/page.tsx
 
+import Toolbar from "@/components/board/toolbar/toolbar";
+
 interface PageProps {
     params: Promise<{ id: string }>;
   }
@@ -10,10 +12,7 @@ interface PageProps {
   
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-bold">Room ID: {id}</h1>
-        <p className="text-muted-foreground">
-          This page was generated dynamically for the ID: {id}
-        </p>
+        <Toolbar />
       </div>
     );
   }
