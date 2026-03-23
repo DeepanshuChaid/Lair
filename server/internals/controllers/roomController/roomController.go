@@ -376,7 +376,7 @@ func UpdateRoomThumbnail() gin.HandlerFunc {
 
 		uploadResult, err := cloudinary.Upload(ctx, openedFile, uploader.UploadParams{
 			Folder:    "thumbnails",
-			PublicID:  userId,
+			PublicID:  roomId,
 			Overwrite: api.Bool(true),
 		})
 

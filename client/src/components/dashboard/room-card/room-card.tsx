@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { MoreVertical, Trash2, Globe, Lock, UserPlus, Loader, Pencil } from "lucide-react"
+import { MoreVertical, Trash2, Globe, Lock, UserPlus, Loader, Pencil, ImagePlus } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/hooks/use-toast"
 import { EditRoomDialog } from "../edit-room-dialog/edit-room-dialog"
+import UploadThumbnail from "../upload-thumbnail/upload-thumbnail"
 
 // --- 1. Define the Schema ---
 const inviteSchema = z.object({
@@ -46,6 +47,9 @@ export const RoomCard = ({ room }: { room: Room }) => {
   const [memberDialogOpen, setMemberDialogOpen] = useState(false)
 
   const [editRoomDialogOpen, setEditRoomDialogOpen] = useState(false);
+
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+
 
   // --- 2. Initialize Form ---
   const {
@@ -176,6 +180,19 @@ export const RoomCard = ({ room }: { room: Room }) => {
                     </DropdownMenuItem>
                 <DropdownMenuSeparator/>
 
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault(); // Prevents dropdown from closing weirdly
+                    setShowUploadDialog(true);
+                  }}
+                  className="cursor-pointer gap-2"
+                >
+                  <ImagePlus className="h-4 w-4 text-[#737373]" />
+                  <span>Upload Thumbnail</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
                 <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600 cursor-pointer" onClick={handleDelete}>
                   <Trash2 className="h-4 w-4" />
                   Delete Room
@@ -192,6 +209,13 @@ export const RoomCard = ({ room }: { room: Room }) => {
           </div>
         </div>
       </div>
+
+      {/* UPLOAD THUMBNIAL DIALOG */}
+      <UploadThumbnail
+        open={showUploadDialog}
+        onOpenChange={setShowUploadDialog}
+        id={room.id}
+      />
 
       {/* THE NEW EDIT DIALOG */}
     <EditRoomDialog 

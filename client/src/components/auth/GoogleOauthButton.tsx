@@ -16,11 +16,10 @@ const GoogleOauthButton = (props: { label: string }) => {
       type="button"
       className="w-full flex items-center justify-center gap-3 px-3 py-[25px] h-[56px]
                  bg-[#1A1A1A] border border-white/10 rounded-lg
-                 shadow-[0_4px_4px_rgba(0,0,0,0.25),inset_0_1px_1px_rgba(235,235,235,0.12)]
-                 !text-white text-[16px]
-                 hover:bg-black-50 hover:shadow-[0_6px_6px_rgba(0,0,0,0.35),inset_0_1px_1px_rgba(235,235,235,0.12)]
-                 active:bg-grey-800 active:shadow-[0_2px_2px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(235,235,235,0.12)]
-                 transition-all duration-150 ease-in-out"
+                 shadow-[0_4px_4px_rgba(0,0,0,0.25),inset_0_1px_4px_rgba(235,235,235,0.12)]
+                 text-white text-[16px]
+                 hover:bg-black-50 active:bg-grey-800 active:shadow-[0_2px_2px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(235,235,235,0.12)]
+                 transition-all duration-150 ease-in-out "
     >
       <Image src="./google.svg" height={25} width={20} alt="GOOGLE_LOGO" />
       {label} with Google
@@ -29,3 +28,7 @@ const GoogleOauthButton = (props: { label: string }) => {
 };
 
 export default GoogleOauthButton;
+
+// flex flex-row justify-center items-center p-3 gap-3 
+//              self-stretch
+//             shadow-[0_4px_4px_rgba(0,0,0,0.25),inset_0_1px_4px_rgba(235,235,235,0.12)]
