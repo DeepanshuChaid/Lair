@@ -14,7 +14,14 @@ function Board({ boardId }: { boardId: string }) {
       className="fixed inset-0 overflow-hidden bg-neutral-100 touch-none"
       data-board-id={boardId}
     >
-      <Tldraw persistenceKey={`board-${boardId}`} />
+      <Tldraw
+        persistenceKey={`board-${boardId}`}
+        onMount={(editor) => {
+          editor.store.listen((update) => {
+            console.log(update.changes);
+          });
+        }}
+      />
     </div>
   );
 }
