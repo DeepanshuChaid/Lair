@@ -9,7 +9,7 @@ export interface Room {
     id: string;
     title: string;
     description: string;
-    is_public: boolean;
+    isPublic: boolean;
     thumbnail?: string;
     created_at: string;
     updated_at: string;

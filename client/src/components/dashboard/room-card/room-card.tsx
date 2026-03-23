@@ -129,9 +129,9 @@ export const RoomCard = ({ room }: { room: Room }) => {
           )}
 
           <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/90 backdrop-blur-sm border border-[#E5E5E5] shadow-sm">
-            {room.is_public ? <Globe size={12} className="text-blue-600" /> : <Lock size={12} className="text-gray-600" />}
+            {room.isPublic ? <Globe size={12} className="text-blue-600" /> : <Lock size={12} className="text-gray-600" />}
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[#171717]">
-              {room.is_public ? "Public" : "Private"}
+              {room.isPublic ? "Public" : "Private"}
             </span>
           </div>
         </div>
