@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { MoreVertical, Trash2, Globe, Lock, UserPlus, Loader } from "lucide-react"
+import { MoreVertical, Trash2, Globe, Lock, UserPlus, Loader, Pencil } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/hooks/use-toast"
+import { EditRoomDialog } from "../edit-room-dialog/edit-room-dialog"
 
 // --- 1. Define the Schema ---
 const inviteSchema = z.object({
@@ -43,6 +44,8 @@ export const RoomCard = ({ room }: { room: Room }) => {
   const queryClient = useQueryClient()
   const [isDeleting, setIsDeleting] = useState(false)
   const [memberDialogOpen, setMemberDialogOpen] = useState(false)
+
+  const [editRoomDialogOpen, setEditRoomDialogOpen] = useState(false);
 
   // --- 2. Initialize Form ---
   const {
@@ -147,6 +150,7 @@ export const RoomCard = ({ room }: { room: Room }) => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[180px]">
+
                 <DropdownMenuItem 
                   className="gap-2 cursor-pointer" 
                   onClick={(e) => {
@@ -157,11 +161,26 @@ export const RoomCard = ({ room }: { room: Room }) => {
                   <UserPlus className="h-4 w-4" />
                   Add Member
                 </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
+                    {/* EDIT BUTTON */}
+                    <DropdownMenuItem 
+                      className="gap-2 cursor-pointer" 
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setEditRoomDialogOpen(true); // Open the edit dialog
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit Room
+                    </DropdownMenuItem>
+                <DropdownMenuSeparator/>
+
                 <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600 cursor-pointer" onClick={handleDelete}>
                   <Trash2 className="h-4 w-4" />
                   Delete Room
                 </DropdownMenuItem>
+
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -173,6 +192,13 @@ export const RoomCard = ({ room }: { room: Room }) => {
           </div>
         </div>
       </div>
+
+      {/* THE NEW EDIT DIALOG */}
+    <EditRoomDialog 
+      open={editRoomDialogOpen} 
+      onOpenChange={setEditRoomDialogOpen} 
+      room={room} 
+    />
 
       {/* --- ADD MEMBER DIALOG --- */}
       <Dialog 
@@ -190,7 +216,7 @@ export const RoomCard = ({ room }: { room: Room }) => {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Form with React Hook Form */}
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="email" className={errors.email ? "text-red-500" : ""}>Email Address</Label>
