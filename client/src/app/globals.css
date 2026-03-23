@@ -137,47 +137,40 @@
    ========================= */
 
 .text-12 {
-  font-family: 'Manrope', sans-serif;
   font-size: 12px;
   line-height: 150%;
   letter-spacing: 0.005em;
 }
 
 .text-14 {
-  font-family: 'Manrope', sans-serif;
   font-size: 14px;
   line-height: 150%;
   letter-spacing: 0.01em;
 }
 
 .text-16 {
-  font-family: 'Manrope', sans-serif;
   font-size: 16px;
   line-height: 162.5%;
   letter-spacing: 0.05em;
 }
 
 .text-18 {
-  font-family: 'Manrope', sans-serif;
   font-size: 18px;
   line-height: 172.2%;
   letter-spacing: 0.05em;
 }
 
 .text-20 {
-  font-family: 'Manrope', sans-serif;
   font-size: 20px;
   line-height: 165%;
 }
 
 .text-24 {
-  font-family: 'Manrope', sans-serif;
   font-size: 24px;
   line-height: 145.8%;
 }
 
 .text-28 {
-  font-family: 'Manrope', sans-serif;
   font-size: 28px;
   line-height: 142%;
 }
@@ -185,21 +178,18 @@
 /* ===== Headings ===== */
 
 .text-32 {
-  font-family: 'Manrope', sans-serif;
   font-size: 32px;
   line-height: 140.6%;
   letter-spacing: -0.01em;
 }
 
 .text-40 {
-  font-family: 'Manrope', sans-serif;
   font-size: 40px;
   line-height: 130%;
   letter-spacing: -0.02em;
 }
 
 .text-48 {
-  font-family: 'Manrope', sans-serif;
   font-size: 48px;
   line-height: 118.75%;
   letter-spacing: -0.03em;

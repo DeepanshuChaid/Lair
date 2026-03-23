@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   const { data: user, isLoading } = useQuery({
-    queryKey: ["authUser"],
+    queryKey: ["user"],
     queryFn: async () => {
       const { data } = await API.get("/api/user")
       return data.user
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: user,
         loading: isLoading,
         refetchUser: () => {
-          queryClient.invalidateQueries({ queryKey: ["authUser"] })
+          queryClient.invalidateQueries({ queryKey: ["user"] })
         },
       }}
     >

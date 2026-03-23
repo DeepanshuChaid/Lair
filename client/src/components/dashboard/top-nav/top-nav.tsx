@@ -17,10 +17,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NewBoardDialog } from "@/components/dashboard/new-board-dialog/new-board-dialog";
+import { useState } from "react";
+import { UploadProfilePicture } from "../upload-profile-picture/upload-profile-picture";
 
 export const TopNav = () => {
   const { user } = useAuth();
   const router = useRouter();
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -35,6 +38,10 @@ export const TopNav = () => {
       console.error("Logout failed:", error);
     }
   };
+
+  const handleUploadPicture = async () => {
+
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#E5E5E5] bg-[#FCFCFC] flex items-center justify-between px-4 sm:px-6 py-3">
@@ -76,13 +83,23 @@ export const TopNav = () => {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+
             <DropdownMenuItem
-              onClick={() => console.log("Upload Picture")}
+              onSelect={(e) => {
+                e.preventDefault(); // Prevents dropdown from closing weirdly
+                setShowUploadDialog(true);
+              }}
               className="cursor-pointer gap-2"
             >
               <ImagePlus className="h-4 w-4 text-[#737373]" />
               <span>Upload Picture</span>
             </DropdownMenuItem>
+
+            <UploadProfilePicture
+              open={showUploadDialog}
+              onOpenChange={setShowUploadDialog}
+            />
+
             <DropdownMenuItem
               onClick={handleLogout}
               className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 gap-2"

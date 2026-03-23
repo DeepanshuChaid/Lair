@@ -84,9 +84,12 @@ export default function SignUpPage() {
     <div className="flex flex-col justify-start items-center gap-6 min-h-svh h-full max-h-svh overflow-y-auto px-4 py-12 bg-[#FAFAFA]">
       <div className="flex w-full flex-col gap-8 justify-center items-center">
         {/* LOGO */}
-        {/* <Link href="/" className="flex item-center self-center"> */}
-          <Image src="/logo-icon.png" alt="logo" height={40} width={104} className="h-[40px] w-auto" />
-        {/* </Link> */}
+        <Link href="/" className="flex items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20 rounded-md">
+          <div className="h-10 w-10 bg-[#FCFCFC] rounded-[10.92px] flex items-center justify-center shadow-[0px_4px_4px_rgba(0,0,0,0.15),inset_0px_7.78px_3px_rgba(255,255,255,0.15)]">
+            <Image src="/logo.png" alt="Logo" width={64} height={64} />
+          </div>
+          <span className="font-bold text-[#171717] tracking-tight text-24">Lair</span>
+        </Link>
 
         <div className="flex flex-col justify-center items-center p-8 gap-8 w-full bg-white border border-[#E5E5E5] rounded-[16px] shadow-sm max-w-[500px]">
           {/* HEADING */}
