@@ -12,6 +12,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@phosphor-icons/react": "^2.1.10",
     "@tanstack/react-query": "^5.91.3",
+    "@tldraw/tldraw": "^4.5.3",
     "axios": "^1.13.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
