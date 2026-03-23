@@ -17,7 +17,7 @@ const GoogleOauthButton = (props: { label: string }) => {
       className="w-full flex items-center justify-center gap-3 px-3 py-[25px] h-[56px]
                  bg-[#1A1A1A] border border-white/10 rounded-lg
                  shadow-[0_4px_4px_rgba(0,0,0,0.25),inset_0_1px_4px_rgba(235,235,235,0.12)]
-                 text-white text-[16px]
+                 !text-white text-[16px]
                  hover:bg-black-50 active:bg-grey-800 active:shadow-[0_2px_2px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(235,235,235,0.12)]
                  transition-all duration-150 ease-in-out "
     >

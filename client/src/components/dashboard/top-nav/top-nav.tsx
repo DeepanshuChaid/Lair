@@ -60,7 +60,7 @@ export const TopNav = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center justify-center rounded-full hover:opacity-90 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E5E5E5]">
-              <Avatar className="h-9 w-9 border border-[#E5E5E5] shrink-0">
+              <Avatar className="h-[42px] w-[42px] border border-[#E5E5E5] shrink-0">
                 <AvatarImage src={user?.profile_picture || ""} alt="Profile" />
                 <AvatarFallback>
                   <UserCircle className="h-full w-full text-[#737373]" />

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import API from "@/lib/axios"
 import { RoomCard } from "@/components/dashboard/room-card/room-card"
+import { RoomSkeleton } from "@/components/dashboard/room-skeleton/room-skeleton";
 
 
 export interface Room {
@@ -32,9 +33,14 @@ export default function DashboardPage() {
 
             {/* Main Content */}
             {isLoading ? (
-                <div className="flex items-center justify-center flex-1">
-                    <p className="text-[#737373] text-[14px]">Loading rooms...</p>
+                <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Render 6 skeletons as placeholders */}
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <RoomSkeleton key={i} />
+                    ))}
                 </div>
+                    </>
             ) : !data || !data.rooms || data.rooms.length === 0 ? (
                 <div className="flex flex-col items-center justify-center flex-1 gap-4">
                     <div className="h-24 w-24 rounded-full bg-white border border-[#E5E5E5] flex items-center justify-center">
