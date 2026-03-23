@@ -81,7 +81,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="flex flex-col justify-center items-center gap-6 min-h-svh h-full px-4 py-12 bg-[#FAFAFA]">
+    <div className="flex flex-col justify-start items-center gap-6 min-h-svh h-full max-h-svh overflow-y-auto px-4 py-12 bg-[#FAFAFA]">
       <div className="flex w-full flex-col gap-8 justify-center items-center">
         {/* LOGO */}
         {/* <Link href="/" className="flex item-center self-center"> */}

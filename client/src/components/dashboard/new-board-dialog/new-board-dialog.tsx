@@ -22,7 +22,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import API from "@/lib/axios";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import Hint from "../sidebar/hint";
+import Hint from "@/components/ui/hint";
 
 const formSchema = z.object({
   title: z
