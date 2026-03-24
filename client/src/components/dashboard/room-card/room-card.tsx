@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "@/hooks/use-toast"
 import { EditRoomDialog } from "../edit-room-dialog/edit-room-dialog"
 import UploadThumbnail from "../upload-thumbnail/upload-thumbnail"
+import Link from "next/link"
 
 // --- 1. Define the Schema ---
 const inviteSchema = z.object({
@@ -122,23 +123,32 @@ export const RoomCard = ({ room }: { room: Room }) => {
 
   return (
     <>
-      <div className="group flex flex-col bg-white rounded-[12px] border border-[#E5E5E5] overflow-hidden hover:shadow-md transition-all cursor-pointer">
-        <div className="relative aspect-video bg-[#FAFAFA] border-b border-[#E5E5E5] overflow-hidden">
-          {room.thumbnail ? (
-            <img src={room.thumbnail} alt={room.title} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center opacity-20 bg-slate-100">
-              <Globe size={48} className="text-slate-400" />
-            </div>
-          )}
+      {/* 2. THE STRETCHED LINK: Covers the whole card */}
+      <Link 
+        href={`/room/${room.id}`} 
+        className="absolute inset-0 z-0"
+        aria-label={`View room: ${room.title}`}
+      />
 
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/90 backdrop-blur-sm border border-[#E5E5E5] shadow-sm">
-            {room.isPublic ? <Globe size={12} className="text-blue-600" /> : <Lock size={12} className="text-gray-600" />}
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#171717]">
-              {room.isPublic ? "Public" : "Private"}
-            </span>
+      <div className="group flex flex-col bg-white rounded-[12px] border border-[#E5E5E5] overflow-hidden hover:shadow-md transition-all cursor-pointer">
+        <Link href={`/room/${room.id}`}>
+          <div className="relative aspect-video bg-[#FAFAFA] border-b border-[#E5E5E5] overflow-hidden">
+            {room.thumbnail ? (
+              <img src={room.thumbnail} alt={room.title} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center opacity-20 bg-slate-100">
+                <Globe size={48} className="text-slate-400" />
+              </div>
+            )}
+
+            <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/90 backdrop-blur-sm border border-[#E5E5E5] shadow-sm">
+              {room.isPublic ? <Globe size={12} className="text-blue-600" /> : <Lock size={12} className="text-gray-600" />}
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#171717]">
+                {room.isPublic ? "Public" : "Private"}
+              </span>
+            </div>
           </div>
-        </div>
+        </Link>
 
         <div className="flex flex-col p-4 gap-3">
           <div className="flex items-start justify-between">
@@ -147,59 +157,62 @@ export const RoomCard = ({ room }: { room: Room }) => {
               <p className="text-[#737373] text-[12px] line-clamp-1 mt-1">{room.description}</p>
             </div>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-[#737373] hover:bg-[#FAFAFA]" disabled={isDeleting}>
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[180px]">
 
-                <DropdownMenuItem 
-                  className="gap-2 cursor-pointer" 
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setMemberDialogOpen(true)
-                  }}
-                >
-                  <UserPlus className="h-4 w-4" />
-                  Add Member
-                </DropdownMenuItem>
+            <div className="relative z-20">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-[#737373] hover:bg-[#FAFAFA]" disabled={isDeleting}>
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[180px]">
 
-                <DropdownMenuSeparator />
-                    {/* EDIT BUTTON */}
-                    <DropdownMenuItem 
-                      className="gap-2 cursor-pointer" 
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setEditRoomDialogOpen(true); // Open the edit dialog
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Edit Room
-                    </DropdownMenuItem>
-                <DropdownMenuSeparator/>
+                  <DropdownMenuItem 
+                    className="gap-2 cursor-pointer" 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setMemberDialogOpen(true)
+                    }}
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Add Member
+                  </DropdownMenuItem>
 
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault(); // Prevents dropdown from closing weirdly
-                    setShowUploadDialog(true);
-                  }}
-                  className="cursor-pointer gap-2"
-                >
-                  <ImagePlus className="h-4 w-4 text-[#737373]" />
-                  <span>Upload Thumbnail</span>
-                </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                      {/* EDIT BUTTON */}
+                      <DropdownMenuItem 
+                        className="gap-2 cursor-pointer" 
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          setEditRoomDialogOpen(true); // Open the edit dialog
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit Room
+                      </DropdownMenuItem>
+                  <DropdownMenuSeparator/>
 
-                <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault(); // Prevents dropdown from closing weirdly
+                      setShowUploadDialog(true);
+                    }}
+                    className="cursor-pointer gap-2"
+                  >
+                    <ImagePlus className="h-4 w-4 text-[#737373]" />
+                    <span>Upload Thumbnail</span>
+                  </DropdownMenuItem>
 
-                <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600 cursor-pointer" onClick={handleDelete}>
-                  <Trash2 className="h-4 w-4" />
-                  Delete Room
-                </DropdownMenuItem>
+                  <DropdownMenuSeparator />
 
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600 cursor-pointer" onClick={handleDelete}>
+                    <Trash2 className="h-4 w-4" />
+                    Delete Room
+                  </DropdownMenuItem>
+
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
 
           <div className="flex items-center justify-between mt-auto pt-2 border-t border-[#F5F5F5]">
