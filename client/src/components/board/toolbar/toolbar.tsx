@@ -1,5 +1,6 @@
 "use client"
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { ToolButton } from "../tool-button/tool-button";
 import { MousePointer, Pencil, Eraser, Circle, Type, Undo, Redo, StickyNote } from "lucide-react";
 
@@ -23,7 +24,7 @@ export default function Toolbar({
     canRedo,
 }: ToolbarProps) {
     return (
-        <div className="absolute top-[50%] -translate-y-[50%] left-2 flex flex-col gap-y-3">
+        <div className="absolute top-[50%] -translate-y-[50%] left-2 flex flex-col gap-y-4">
             <div className="bg-white rounded-md p-1.5 flex gap-y-1 flex-col items-center shadow-md">
                 <ToolButton
                     label="Cursor"
@@ -73,10 +74,17 @@ export default function Toolbar({
                 <ToolButton 
                     label="Redo"
                     icon={Redo}
-                    onClick={redo}
+                    onClick={redo}  
                     isDisabled={!canRedo}
                 />
             </div>
+        </div>
+    )
+}
+
+export function ToolbarSkeleton() {
+    return (
+        <div className="absolute top-[50%] -translate-y-[50%] left-2 flex flex-col gap-y-4 bg-white h-[360px] w-[52px] shadow-md rounded-md">
         </div>
     )
 }
