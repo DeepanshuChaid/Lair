@@ -79,6 +79,7 @@ func main() {
 
 	// Room routes
 	protectedRoutes.GET("/room/get", roomController.GetUserRooms())
+	protectedRoutes.GET("/room/get-members/:id", roomController.GetRoomMembers())
 	protectedRoutes.POST("/room/create", roomController.CreateRoom())
 	protectedRoutes.DELETE("/room/delete/:id", roomController.DeleteRoom())
 	protectedRoutes.PUT("/room/update/:id", roomController.UpdateRoom())

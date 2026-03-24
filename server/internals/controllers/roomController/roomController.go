@@ -331,6 +331,67 @@ func UpdateRoom() gin.HandlerFunc {
 	}
 }
 
+func GetRoomMembers() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+        defer cancel()
+
+        roomId := c.Param("id")
+        
+        // Using a single query to get Room + State + Members array
+        // We use COALESCE to handle rooms that might not have members yet
+        query := `
+            SELECT 
+                r.id, r.owner_id, r.title, r.description, r.is_public, 
+                r.thumbnail_url, r.version, r.created_at, r.updated_at,
+                COALESCE(rs.state, '{}'::jsonb),
+                COALESCE(json_agg(json_build_object(
+                    'id', u.id,
+                    'name', u.name,
+                    'email', u.email,
+                    'image', u.image_url,
+                    'role', rm.role
+                )) FILTER (WHERE u.id IS NOT NULL), '[]'::json) AS members
+            FROM rooms r
+            LEFT JOIN room_state rs ON r.id = rs.room_id
+            LEFT JOIN room_member rm ON r.id = rm.room_id
+            LEFT JOIN users u ON rm.user_id = u.id
+            WHERE r.id = $1
+            GROUP BY r.id, rs.state;`
+
+        var room struct {
+            ID           string          `json:"id"`
+            OwnerID      string          `json:"owner_id"`
+            Title        string          `json:"title"`
+            Description  *string         `json:"description"` // Use pointer for nullable TEXT
+            IsPublic     bool            `json:"is_public"`
+            ThumbnailURL *string         `json:"thumbnail_url"`
+            Version      int             `json:"version"`
+            CreatedAt    time.Time       `json:"created_at"`
+            UpdatedAt    time.Time       `json:"updated_at"`
+            State        json.RawMessage `json:"state"`
+            Members      json.RawMessage `json:"members"` // Scan the whole JSON array here
+        }
+
+        err := database.Pool.QueryRow(ctx, query, roomId).Scan(
+            &room.ID, &room.OwnerID, &room.Title, &room.Description, 
+            &room.IsPublic, &room.ThumbnailURL, &room.Version, 
+            &room.CreatedAt, &room.UpdatedAt, &room.State, &room.Members,
+        )
+
+        if err != nil {
+            // Log the actual error for debugging 
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query failed", "details": err.Error(),})
+            return
+        }
+
+        c.JSON(http.StatusOK, gin.H{
+            "message": "Room fetched successfully",
+            "room":    room,
+        })
+    }
+}
+
 // ==================================== //
 // Update Room Thumbnail   //
 // ==================================== //
