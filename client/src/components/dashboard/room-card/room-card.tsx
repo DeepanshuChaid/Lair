@@ -65,7 +65,7 @@ export const RoomCard = ({ room }: { room: Room }) => {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      await API.delete(`/api/room/delete/${room.id}`)
+      await API.delete(`/api/room/delete/${room.id}?title=${room.title}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rooms"] })
@@ -125,13 +125,13 @@ export const RoomCard = ({ room }: { room: Room }) => {
     <>
       {/* 2. THE STRETCHED LINK: Covers the whole card */}
       <Link 
-        href={`/room/${room.id}`} 
+        href={`/room/${room.id}?title=${room.title}`} 
         className="absolute inset-0 z-0"
         aria-label={`View room: ${room.title}`}
       />
 
       <div className="group flex flex-col bg-white rounded-[12px] border border-[#E5E5E5] overflow-hidden hover:shadow-md transition-all cursor-pointer">
-        <Link href={`/room/${room.id}`}>
+        <Link href={`/room/${room.id}?title=${room.title}`}>
           <div className="relative aspect-video bg-[#FAFAFA] border-b border-[#E5E5E5] overflow-hidden">
             {room.thumbnail ? (
               <img src={room.thumbnail} alt={room.title} className="w-full h-full object-cover" />
