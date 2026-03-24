@@ -5,7 +5,7 @@ import Members from "../members/members";
 import Toolbar from "../toolbar/toolbar";
 
 
-export default function Canvas() {
+export default function Canvas({id}: {id: string}) {
     return (
         <main className="h-full w-full relative bg-neutral-100 touch-none">
             <Info />
