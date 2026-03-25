@@ -9,7 +9,7 @@ export default function Canvas({id, title}: {id: string, title: string}) {
     return (
         <main className="h-full w-full relative bg-neutral-100 touch-none">
             <Info id={id} title={title}/>
-            <Members />
+            <Members id={id} />
             <Toolbar  
                 canvasState={{}}
                 setCanvasState={() => {}}
