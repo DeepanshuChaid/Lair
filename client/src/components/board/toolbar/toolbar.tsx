@@ -3,12 +3,12 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToolButton } from "../tool-button/tool-button";
 import { MousePointer, Pencil, Eraser, Circle, Type, Undo, Redo, StickyNote } from "lucide-react";
+import { CanvasMode } from "@/types/canvas";
 
-type canvasState = any;
 
 interface ToolbarProps {
-    canvasState: canvasState;
-    setCanvasState: (newState: canvasState) => void;
+    canvasState: CanvasMode;
+    setCanvasState: (newState: CanvasMode) => void;
     undo: () => void;
     redo: () => void;
     canUndo: boolean;

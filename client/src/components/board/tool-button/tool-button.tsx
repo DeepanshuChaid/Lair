@@ -1,6 +1,6 @@
 "use client";
 
-import { LucideIcon } from "lucide-react"; // Removed 'Icon' type import as it's confusing
+import { LucideIcon } from "lucide-react";
 
 import Hint from "@/components/dashboard/sidebar/hint";
 import { Button } from "@/components/ui/button";

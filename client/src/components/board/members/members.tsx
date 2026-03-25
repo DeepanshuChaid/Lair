@@ -3,6 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import API from "@/lib/axios";
 import { useQuery } from "@tanstack/react-query";
 import UserAvatar from "../user-avatar";
+import { connectionColor } from "@/lib/utils";
 
 const MAX_SHOWN_USER = 2;
 
@@ -42,6 +43,8 @@ export default function Members({id}: {id: string}) {
                 {shownMembers.map((member: MemberType) => (
                     <UserAvatar 
                         key={member.id}
+                        // Pass the string ID directly now
+                        borderColor={connectionColor(member.id)} 
                         name={member.name}
                         src={member.profile_picture}
                         fallback={member.name.charAt(0).toUpperCase() || "N"}
@@ -49,13 +52,14 @@ export default function Members({id}: {id: string}) {
                 ))}
 
                 {hasMore && (
-                    <div className="bg-gray-100 border-2 border-white"> 
-                        <UserAvatar 
-                            name={`${moreNames}`} // This will show in your "hint" label
-                            fallback={`+${moreCount}`}
-                            // Add a custom class if you want the +X bubble to look different
-                        />
-                    </div>
+                    /* I removed the extra <div> wrapper so the Avatar's own styling 
+                    and your gap-x-2 works correctly */
+                    <UserAvatar 
+                        name={moreNames} 
+                        fallback={`+${moreCount}`}
+                        // You might want a neutral border for the "more" bubble
+                        borderColor="#E5E7EB" 
+                    />
                 )}
             </div>
         </div>
@@ -69,4 +73,4 @@ export function MembersSkeleton() {
             <Skeleton className="w-full h-full bg-muted-400" />
         </div>
     )
-}
+} 
