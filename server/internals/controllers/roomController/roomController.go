@@ -342,8 +342,7 @@ func GetRoomMembers() gin.HandlerFunc {
 		// We use COALESCE to handle rooms that might not have members yet
 		query := `
             SELECT 
-                r.id, r.owner_id, r.title, r.description, r.is_public, 
-                r.thumbnail_url, r.version, r.created_at, r.updated_at,
+                r.id, r.owner_id, r.title, r.version, r.created_at, r.updated_at,
                 COALESCE(rs.state, '{}'::jsonb),
                 COALESCE(json_agg(json_build_object(
                     'id', u.id,
@@ -363,9 +362,6 @@ func GetRoomMembers() gin.HandlerFunc {
 			ID           string          `json:"id"`
 			OwnerID      string          `json:"owner_id"`
 			Title        string          `json:"title"`
-			Description  *string         `json:"description"` // Use pointer for nullable TEXT
-			IsPublic     bool            `json:"is_public"`
-			ThumbnailURL *string         `json:"thumbnail_url"`
 			Version      int             `json:"version"`
 			CreatedAt    time.Time       `json:"created_at"`
 			UpdatedAt    time.Time       `json:"updated_at"`
@@ -374,8 +370,7 @@ func GetRoomMembers() gin.HandlerFunc {
 		}
 
 		err := database.Pool.QueryRow(ctx, query, roomId).Scan(
-			&room.ID, &room.OwnerID, &room.Title, &room.Description,
-			&room.IsPublic, &room.ThumbnailURL, &room.Version,
+			&room.ID, &room.OwnerID, &room.Title, &room.Version,
 			&room.CreatedAt, &room.UpdatedAt, &room.State, &room.Members,
 		)
 

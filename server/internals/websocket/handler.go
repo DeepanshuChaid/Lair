@@ -93,7 +93,7 @@ func AddMember() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Member added successfully"})
+		c.JSON(http.StatusCreated, gin.H{"message": "Member added successfully"})
 	}
 }
 

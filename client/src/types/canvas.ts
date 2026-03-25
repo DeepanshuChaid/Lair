@@ -68,7 +68,7 @@ export type RectangleLayer = {
     x: number;
     y: number;
     height: number;
-    weight: number;
+    width: number;
     fill: color;
     value?: string;
 }
@@ -78,7 +78,7 @@ export type EllipseLayer = {
     x: number;
     y: number;
     height: number;
-    weight: number;
+    width: number;
     fill: color;
     value?: string;
 }
@@ -88,7 +88,7 @@ export type PathLayer = {
     x: number;
     y: number;
     height: number;
-    weight: number;
+    width: number;
     fill: color;
     Points: number[][];
     value?: string;
@@ -99,7 +99,7 @@ export type TextLayer = {
     x: number;
     y: number;
     height: number;
-    weight: number;
+    width: number;
     fill: color;
     value?: string;
 }
@@ -109,7 +109,7 @@ export type NoteLayer = {
     x: number;
     y: number;
     height: number;
-    weight: number;
+    width: number;
     fill: color;
     value?: string;
 }
@@ -133,3 +133,6 @@ export enum Side {
     right = 8,
 }
 
+
+
+export type Layer = RectangleLayer | EllipseLayer | PathLayer | TextLayer | NoteLayer;
