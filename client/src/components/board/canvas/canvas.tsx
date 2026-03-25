@@ -6,6 +6,7 @@ import Toolbar from "../toolbar/toolbar";
 import { useState } from "react";
 import { CanvasMode, CanvasState } from "@/types/canvas";
 import { useHistory } from "@/hooks/use-history";
+import {CursorPresence} from "../cursor-presence";
 
 
 export default function Canvas({id, title}: {id: string, title: string}) {
@@ -37,6 +38,15 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                 canUndo={canUndo}
                 canRedo={canRedo} 
             />
+
+            <svg
+                className="bg-black h-screen w-screen"
+            >
+                <g>
+                    <CursorPresence />
+                </g>
+            </svg>
+            
         </main>
     )
 }
