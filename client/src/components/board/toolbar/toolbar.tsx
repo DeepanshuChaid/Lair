@@ -43,14 +43,14 @@ export default function Toolbar({
                         canvasState.mode === CanvasMode.Translating ||
                         canvasState.mode === CanvasMode.SelectionNet ||
                         canvasState.mode === CanvasMode.Pressing ||
-                        canvasState.mode === CanvasMode.Resizing 
+                        canvasState.mode === CanvasMode.Resizing
                     }
                     onClick={() => setCanvasState({ mode: CanvasMode.None })}
                 />
                 <ToolButton 
                     label="Text"
                     icon={Type}
-                    isActive={canvasState.mode === CanvasMode.Inserting} // Logic depends on how you handle 'Inserting'
+                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Text"} // Logic depends on how you handle 'Inserting'
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
                         layerType: "Text" // Assuming your Inserting state takes a layerType
@@ -59,7 +59,7 @@ export default function Toolbar({
                 <ToolButton 
                     label="Sticky note"
                     icon={StickyNote}
-                    isActive={canvasState.mode === CanvasMode.Inserting}
+                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Note"}
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
                         layerType: "Note" 
@@ -68,7 +68,7 @@ export default function Toolbar({
                 <ToolButton 
                     label="Rectangle"
                     icon={Square}
-                    isActive={canvasState.mode === CanvasMode.Inserting}
+                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Rectangle"}
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
                         layerType: "Rectangle" 
@@ -77,7 +77,7 @@ export default function Toolbar({
                 <ToolButton 
                     label="Circle"
                     icon={Circle}
-                    isActive={canvasState.mode === CanvasMode.Inserting}
+                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Ellipse"}
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
                         layerType: "Circle" 
