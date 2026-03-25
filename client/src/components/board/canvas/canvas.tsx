@@ -9,13 +9,16 @@ import Info from "../info/info";
 import Members from "../members/members";
 import Toolbar from "../toolbar/toolbar";
 import { CursorPresence } from "../cursor-presence";
+import { useAuth } from "@/providers/auth-provider";
 
 export default function Canvas({id, title}: {id: string, title: string}) {
     const [canvasState, setCanvasState] = useState<CanvasState>({ mode: CanvasMode.None });
     const { undo, redo, canUndo, canRedo } = useHistory();
+
+    const {user} = useAuth();
     
     // State to track other users' cursors
-    const [otherCursors, setOtherCursors] = useState<Record<string, {x: number, y: number}>>({});
+    const [otherCursors, setOtherCursors] = useState<Record<string, {x: number, y: number, name: string}>>({});
     const wsRef = useRef<WebSocket | null>(null);
     const lastSentRef = useRef<number>(0); 
 
@@ -51,7 +54,7 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         if (now - lastSentRef.current < 30) return;
         lastSentRef.current = now;
 
-        const current = { x: Math.round(e.clientX), y: Math.round(e.clientY) };
+        const current = { x: Math.round(e.clientX), y: Math.round(e.clientY), name: user?.name || "AMIE"  };
 
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({

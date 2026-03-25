@@ -2,23 +2,29 @@
 
 import { memo } from 'react';
 import Cursor from './cursor';
+import { useAuth } from '@/providers/auth-provider';
 
 interface CursorPresenceProps {
-    cursors: Record<string, {x: number, y: number}>;
+    cursors: Record<string, {x: number, y: number, name: string}>;
 }
 
 export const CursorPresence = memo(({ cursors }: CursorPresenceProps) => {
+    const {user} = useAuth();
+
     return (
         <>
-            {Object.entries(cursors).map(([userId, position]) => (
+            {Object.entries(cursors).map(([userId, position]) => {
+                if (userId === user?.id) return;
+                return (
                 <Cursor 
                     key={userId}
                     connectionId={userId}
                     x={position.x}
                     y={position.y}
-                    name={`User ${userId.slice(0, 4)}`} // Or get actual name from a members list
+                    name={`${position.name || "AMIE"}`} // Or get actual name from a members list
                 />
-            ))}
+            )}
+        )}
         </>
     );
 });
