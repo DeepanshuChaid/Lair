@@ -17,4 +17,4 @@ export const LayerPreview = memo(({id, onLayerPointDown, onLayerPointUp, selecti
     )
 })
 
-LayerPreview.displayName = "LayerPreview";
+LayerPreview.displayName = "LayerPreview"; 

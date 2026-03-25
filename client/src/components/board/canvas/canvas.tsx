@@ -23,7 +23,7 @@ export default function Canvas({id, title}: {id: string, title: string}) {
 
     const router = useRouter()
 
-    const [camera, setCamera] = useState({x: 0, y: 0});
+    const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
 
     const [lastUsedColor, setLastUsedColor] = useState<color>({
         r: 0,
@@ -165,13 +165,61 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         }
     }, []);
 
-    const onWheel = useCallback((e: React.WheelEvent) => {
+    const onWheel = useCallback((e: WheelEvent) => {
         e.preventDefault();
-        setCamera((prev) => ({
-            x: prev.x - e.deltaX,
-            y: prev.y - e.deltaY,
-        }));
-    }, [])
+    
+        if (e.ctrlKey || e.metaKey) {
+            // --- ZOOM LOGIC (Keep as is) ---
+            const zoomSpeed = 0.001;
+            const delta = -e.deltaY;
+            const scaleChange = delta * zoomSpeed;
+            
+            setCamera((prev) => {
+                const newScale = Math.min(Math.max(prev.scale + scaleChange, 0.1), 10);
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+                
+                const dx = (mouseX - prev.x) * (newScale / prev.scale - 1);
+                const dy = (mouseY - prev.y) * (newScale / prev.scale - 1);
+    
+                return {
+                    x: prev.x - dx,
+                    y: prev.y - dy,
+                    scale: newScale,
+                };
+            });
+        } else {
+            // --- PAN LOGIC WITH SHIFT-SCROLL ---
+            setCamera((prev) => {
+                if (e.shiftKey) {
+                    // If Shift is held, vertical scroll (deltaY) moves the camera horizontally
+                    return {
+                        ...prev,
+                        x: prev.x - e.deltaY, 
+                        y: prev.y - e.deltaX, // deltaX might still exist from a trackpad
+                    };
+                }
+                
+                // Standard behavior
+                return {
+                    ...prev,
+                    x: prev.x - e.deltaX,
+                    y: prev.y - e.deltaY,
+                };
+            });
+        }
+    }, []);
+
+    useEffect(() => {
+        const svg = svgRef.current;
+        if (!svg) return;
+    
+        // Attach native event listener with passive: false
+        const handleWheel = (e: WheelEvent) => onWheel(e);
+        
+        svg.addEventListener("wheel", handleWheel, { passive: false });
+        return () => svg.removeEventListener("wheel", handleWheel);
+    }, [onWheel]);
 
     const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
 
@@ -180,12 +228,14 @@ export default function Canvas({id, title}: {id: string, title: string}) {
             const bounds = svgRef.current?.getBoundingClientRect();
             const left = bounds?.left ?? 0;
             const top = bounds?.top ?? 0;
+            
             return {
-                x: clientX - left - camera.x,
-                y: clientY - top - camera.y,
+                // Subtract camera offset, then scale it
+                x: (clientX - left - camera.x) / camera.scale,
+                y: (clientY - top - camera.y) / camera.scale,
             };
         },
-        [camera.x, camera.y]
+        [camera.x, camera.y, camera.scale] // Add scale to dependencies
     );
 
     const onSvgPointerDown = useCallback(
@@ -310,15 +360,21 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                 canRedo={canRedo} 
             />
 
-            <svg
-                ref={svgRef}
-                className="h-screen w-screen"
-                onWheel={onWheel}
-                onPointerDown={onSvgPointerDown}
-                onPointerMove={onSvgPointerMove}
-                onPointerUp={onSvgPointerUp}
-            >
-                <g style={{transform: `translate(${camera.x}px, ${camera.y}px)`}}>
+                <svg
+                    ref={svgRef}
+                    className="h-screen w-screen bg-neutral-100 touch-none"
+                    onPointerDown={onSvgPointerDown}
+                    onPointerMove={onSvgPointerMove}
+                    onPointerUp={onSvgPointerUp}
+                    // onWheel={onWheel} <-- REMOVE THIS
+                >
+                    <g 
+                        style={{
+                            // translate first, then scale
+                            transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
+                            transformOrigin: "0 0", // Crucial for manual math
+                        }}
+                    >
                     {draftRectangleLayer && (
                         <RectangleTool
                             id={draftRectangleLayer.id}
