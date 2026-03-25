@@ -17,7 +17,7 @@ export default function Canvas({id, title}: {id: string, title: string}) {
     // State to track other users' cursors
     const [otherCursors, setOtherCursors] = useState<Record<string, {x: number, y: number}>>({});
     const wsRef = useRef<WebSocket | null>(null);
-    const lastSentRef = useRef<number>(0);
+    const lastSentRef = useRef<number>(0); 
 
     useEffect(() => {
         let isCancelled = false;
