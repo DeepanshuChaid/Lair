@@ -24,3 +24,7 @@ export const CursorPresence = memo(({ cursors }: CursorPresenceProps) => {
 });
 
 CursorPresence.displayName = "CursorPresence";
+
+// const otherCursor = [
+//  userId: {x: number, y: number}       
+// ]

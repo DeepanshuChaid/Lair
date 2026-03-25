@@ -79,7 +79,6 @@ export default function Canvas({id, title}: {id: string, title: string}) {
 
             <svg className="h-screen w-screen">
                 <g>
-                    {/* Pass the real cursors from state */}
                     <CursorPresence cursors={otherCursors} />
                 </g>
             </svg>
