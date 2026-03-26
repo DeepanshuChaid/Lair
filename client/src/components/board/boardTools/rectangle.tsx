@@ -26,3 +26,4 @@ export const Rectangle = ({id, layer, onPointerDown, selectionColor}: RectangleP
     )
 } 
 
+

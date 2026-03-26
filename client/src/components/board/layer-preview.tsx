@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { Layer, layerType, color } from "@/types/canvas";
 import { Rectangle } from "./boardTools/rectangle"; // Adjust path as needed
+import { Ellipse } from "./boardTools/ellipse";
 // Import Ellipse, Text, etc. later
 
 interface LayerPreviewProps {
@@ -23,6 +24,15 @@ export const LayerPreview = memo(({
         case layerType.Rectangle:
             return (
                 <Rectangle
+                    id={id}
+                    layer={layer}
+                    onPointerDown={onLayerPointerDown}
+                    selectionColor={selectionColor}
+                />
+            );
+        case layerType.Ellipse:
+            return (
+                <Ellipse
                     id={id}
                     layer={layer}
                     onPointerDown={onLayerPointerDown}

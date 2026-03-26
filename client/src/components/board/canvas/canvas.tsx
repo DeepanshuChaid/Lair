@@ -15,20 +15,21 @@ import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Rectangle as RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
+import { Ellipse } from "../boardTools/ellipse";
 
 const MAX_LAYERS = 500;
 
 export default function Canvas({id, title}: {id: string, title: string}) {
     const [canvasState, setCanvasState] = useState<CanvasState>({ mode: CanvasMode.None });
-    const { undo, redo, canUndo, canRedo, saveState, currentState } = useHistory();
+    const { undo, redo, canUndo, canRedo, saveState, currentState, history } = useHistory();
 
     const router = useRouter()
 
     const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
 
     const [lastUsedColor, setLastUsedColor] = useState<color>({
-        r: 255,
-        b: 0,
+        r: 0,
+        b: 255,
         g: 0,
     });
 
@@ -242,28 +243,29 @@ export default function Canvas({id, title}: {id: string, title: string}) {
     const onSvgPointerMove = useCallback(
         (e: React.PointerEvent<SVGSVGElement>) => {
             if (!insertingStartRef.current) return;
-            if (canvasState.mode !== CanvasMode.Inserting || canvasState.layerType !== "Rectangle") return;
-
+            if (canvasState.mode !== CanvasMode.Inserting) return;
+    
             const start = insertingStartRef.current;
             const end = clientToWorld(e.clientX, e.clientY);
-
+    
             const x = Math.min(start.x, end.x);
             const y = Math.min(start.y, end.y);
             const width = Math.abs(end.x - start.x);
             const height = Math.abs(end.y - start.y);
-
+    
+            // Use the current layerType from state (Rectangle, Ellipse, etc.)
             setDraftRectangleLayer({
-                id: "draft-rectangle",
+                id: "draft",
                 layer: {
-                    type: layerType.Rectangle,
+                    type: canvasState.layerType, // Use active tool type
                     x,
                     y,
                     width,
                     height,
                     fill: lastUsedColor,
-                },
+                } as any,
             });
-
+    
             e.preventDefault();
         },
         [canvasState, clientToWorld, lastUsedColor]
@@ -271,56 +273,47 @@ export default function Canvas({id, title}: {id: string, title: string}) {
 
     const onSvgPointerUp = useCallback(
         (e: React.PointerEvent<SVGSVGElement>) => {
-            if (!insertingStartRef.current) return;
-            if (canvasState.mode !== CanvasMode.Inserting || canvasState.layerType !== "Rectangle") return;
-
+            if (!insertingStartRef.current || canvasState.mode !== CanvasMode.Inserting) return;
+    
             const start = insertingStartRef.current;
             const end = clientToWorld(e.clientX, e.clientY);
-
+    
             const x = Math.min(start.x, end.x);
             const y = Math.min(start.y, end.y);
             const width = Math.abs(end.x - start.x);
             const height = Math.abs(end.y - start.y);
-
-            // Ignore tiny clicks/drags.
+    
             if (width >= 1 && height >= 1) {
-                const newId = `rect-${rectIdCounterRef.current++}`;
-                if (rectangleLayers.length >= MAX_LAYERS) {
-                    insertingStartRef.current = null;
-                    setDraftRectangleLayer(null);
-                    e.preventDefault();
-                    return;
-                }
-
+                const newId = `layer-${rectIdCounterRef.current++}`;
+                
+                // Clean and type-safe!
+                const type = canvasState.layerType;
+    
                 const nextLayers = [
                     ...rectangleLayers,
                     {
                         id: newId,
                         layer: {
-                            type: layerType.Rectangle,
+                            type, // TypeScript now knows this is a valid layerType
                             x,
                             y,
                             width,
                             height,
                             fill: lastUsedColor,
-                        } satisfies RectangleLayer,
+                        } as any, // Use your Layer union type here
                     },
                 ];
-
-                setRectangleLayers(nextLayers);
+    
                 saveState(JSON.stringify(nextLayers));
+                setRectangleLayers(nextLayers); // Ensure local state updates too
             }
-
+    
             insertingStartRef.current = null;
             setDraftRectangleLayer(null);
-
-            
-
-            e.preventDefault();
+            setCanvasState({ mode: CanvasMode.None });
         },
         [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState]
     );
-
 
 
     const [selection, setSelection] = useState<string[]>([]); // Array of selected layer IDs
@@ -446,6 +439,12 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         }
     }, [canvasState, selection, clientToWorld, user?.name]);
 
+    useEffect(() => {
+        console.log("reactangleLayer :", rectangleLayers)
+        // console.log('history :',  history)
+        console.log("currentState :", currentState)
+    })
+
 
     return (
         <main 
@@ -479,24 +478,47 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                         }}
                     >
                     {draftRectangleLayer && (
-                        <RectangleTool
-                            id={draftRectangleLayer.id}
-                            layer={draftRectangleLayer.layer}
-                            onPointerDown={() => {}}
-                            selectionColor={strokeColor}
-                        />
+                        draftRectangleLayer.layer.type === layerType.Ellipse ? (
+                            <Ellipse 
+                                id={draftRectangleLayer.id}
+                                layer={draftRectangleLayer.layer as any}
+                                onPointerDown={() => {}}
+                                selectionColor={strokeColor}
+                            />
+                        ) : (
+                            <RectangleTool
+                                id={draftRectangleLayer.id}
+                                layer={draftRectangleLayer.layer as any}
+                                onPointerDown={() => {}}
+                                selectionColor={strokeColor}
+                            />
+                        )
                     )}
 
-                    {rectangleLayers.map(({ id: layerId, layer }) => (
-                        <RectangleTool
-                            key={layerId}
-                            id={layerId}
-                            layer={layer}
-                            // Pass the actual handler here
-                            onPointerDown={onLayerPointerDown} 
-                            selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
-                        />
-                    ))}
+                    {rectangleLayers.map(({ id: layerId, layer }) => {
+                        if (layer.type === layerType.Rectangle) {
+                            return (
+                                <RectangleTool
+                                    key={layerId}
+                                    id={layerId}
+                                    layer={layer}
+                                    onPointerDown={onLayerPointerDown} 
+                                    selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
+                                />
+                            );
+                        } else if (layer.type === layerType.Ellipse) {
+                            return (
+                                <Ellipse
+                                    key={layerId}
+                                    id={layerId}
+                                    layer={layer}
+                                    onPointerDown={onLayerPointerDown}
+                                    selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
+                                />
+                            );
+                        }
+                        return null;
+                    })}
 
                     <SelectionBox
                         bounds={selectionBounds} 
@@ -509,4 +531,5 @@ export default function Canvas({id, title}: {id: string, title: string}) {
             </svg>
         </main>
     );
-}
+} 
+

@@ -20,8 +20,9 @@ export type CanvasState =
     }
     |
     {
-        mode: CanvasMode.Inserting
-        layerType: "Text" | "Note" | "Rectangle" | "Ellipse";
+        mode: CanvasMode.Inserting;
+        // Change from strings to the actual enum type
+        layerType: layerType.Rectangle | layerType.Ellipse | layerType.Text | layerType.Note;
     }
     |
     {
@@ -56,11 +57,11 @@ export type Camera = {
 }
 
 export enum layerType {
-    Rectangle,
-    Ellipse,
-    Path,
-    Text,
-    Note,
+    Rectangle = "Rectangle",
+    Ellipse = "Ellipse",
+    Path = "Path",
+    Text = "Text",
+    Note = "Note",
 }
 
 export type RectangleLayer = {
@@ -136,3 +137,5 @@ export enum Side {
 
 
 export type Layer = RectangleLayer | EllipseLayer | PathLayer | TextLayer | NoteLayer;
+
+

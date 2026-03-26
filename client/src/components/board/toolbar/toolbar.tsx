@@ -80,7 +80,7 @@ export default function Toolbar({
                     isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Ellipse"}
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
-                        layerType: "Circle" 
+                        layerType: "Ellipse" 
                     } as any)}
                 />
                 <ToolButton 

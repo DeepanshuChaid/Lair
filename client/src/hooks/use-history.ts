@@ -32,6 +32,7 @@ export const useHistory = () => {
     canUndo, 
     canRedo, 
     saveState, 
-    currentState: history[index] 
+    currentState: history[index],
+    history: history 
   };
 };
