@@ -42,7 +42,7 @@ CREATE TABLE room_state (
   state JSONB NOT NULL DEFAULT '{}',
 
   created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
+  updated_at TIMESTAMP DEFAULT now(),
 
   UNIQUE(room_id)
 )

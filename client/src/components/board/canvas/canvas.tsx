@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { CanvasMode, CanvasState, color, layerType, Point, RectangleLayer } from "@/types/canvas";
+import { CanvasMode, CanvasState, color, layerType, Point, RectangleLayer, Side, XYMH } from "@/types/canvas";
 import { useHistory } from "@/hooks/use-history";
 import { connectSocket } from "@/lib/api/websocket-api";
 
@@ -14,6 +14,7 @@ import {LayerPreview} from "../layer-preview";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Rectangle as RectangleTool } from "../boardTools/rectangle";
+import { SelectionBox } from "../selection-box";
 
 const MAX_LAYERS = 500;
 
@@ -147,46 +148,6 @@ export default function Canvas({id, title}: {id: string, title: string}) {
             setDraftRectangleLayer(null);
         }
     }, [canvasState]);
-
-    // THROTTLED MOUSE MOVE
-    const onPointerMove = useCallback((e: React.PointerEvent) => {
-        const coords = clientToWorld(e.clientX, e.clientY);
-
-        if (canvasState.mode === CanvasMode.Translating && canvasState.current) {
-            const deltaX = coords.x - canvasState.current.x;
-            const deltaY = coords.y - canvasState.current.y;
-
-            setRectangleLayers((prev) => prev.map((item) => {
-                if (selection.includes(item.id)) {
-                    return {
-                        ...item,
-                        layer: {
-                            ...item.layer,
-                            x: item.layer.x + deltaX,
-                            y: item.layer.y + deltaY,
-                        }
-                    };
-                }
-                return item;
-            }));
-
-            setCanvasState({ mode: CanvasMode.Translating, current: coords });
-        }
-
-        const now = Date.now();
-        // Only send every 30ms (roughly 33fps) to save the Go backend
-        if (now - lastSentRef.current < 30) return;
-        lastSentRef.current = now;
-
-        const current = { x: Math.round(e.clientX), y: Math.round(e.clientY), name: user?.name || "AMIE"  };
-
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
-                type: "CURSOR_MOVE",
-                content: current
-            }));
-        }
-    }, []);
 
     const onWheel = useCallback((e: WheelEvent) => {
         e.preventDefault();
@@ -353,6 +314,8 @@ export default function Canvas({id, title}: {id: string, title: string}) {
             insertingStartRef.current = null;
             setDraftRectangleLayer(null);
 
+            
+
             e.preventDefault();
         },
         [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState]
@@ -397,11 +360,98 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         setCanvasState({ mode: CanvasMode.Translating, current: coords });
     }, [canvasState.mode, clientToWorld]);
 
+    const onResizeHandlePointerDown = useCallback((corner: Side, initialBounds: XYMH) => {
+        setCanvasState({
+            mode: CanvasMode.Resizing,
+            initialBounds,
+            corner,
+        });
+    }, []);
+
+    const onPointerUp = useCallback(() => {
+        if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
+            // This pushes the final position to your Undo/Redo history
+            saveState(JSON.stringify(rectangleLayers));
+        }
+        
+        // Reset the mode so the cursor doesn't "stick" to the object
+        setCanvasState({ mode: CanvasMode.None });
+    }, [canvasState.mode, rectangleLayers, saveState]);
+
+    // THROTTLED MOUSE MOVE
+    const onPointerMove = useCallback((e: React.PointerEvent) => {
+        const coords = clientToWorld(e.clientX, e.clientY);
+    
+        // --- RESIZING LOGIC ---
+        if (canvasState.mode === CanvasMode.Resizing && selection.length === 1) {
+            const { initialBounds, corner } = canvasState;
+            setRectangleLayers((prev) => prev.map((item) => {
+                if (item.id === selection[0]) {
+                    let { x, y, width, height } = initialBounds;
+                    if ((corner & Side.top) === Side.top) {
+                        y = Math.min(coords.y, initialBounds.y + initialBounds.height);
+                        height = Math.abs(initialBounds.y + initialBounds.height - coords.y);
+                    }
+                    if ((corner & Side.bottom) === Side.bottom) {
+                        y = Math.min(coords.y, initialBounds.y);
+                        height = Math.abs(coords.y - initialBounds.y);
+                    }
+                    if ((corner & Side.left) === Side.left) {
+                        x = Math.min(coords.x, initialBounds.x + initialBounds.width);
+                        width = Math.abs(initialBounds.x + initialBounds.width - coords.x);
+                    }
+                    if ((corner & Side.right) === Side.right) {
+                        x = Math.min(coords.x, initialBounds.x);
+                        width = Math.abs(coords.x - initialBounds.x);
+                    }
+                    return { ...item, layer: { ...item.layer, x, y, width, height } };
+                }
+                return item;
+            }));
+        }
+    
+        // --- TRANSLATING (MOVING) LOGIC ---
+        if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
+            const offset = {
+                x: coords.x - canvasState.current.x,
+                y: coords.y - canvasState.current.y,
+            };
+    
+            setRectangleLayers((prev) => prev.map((item) => {
+                if (selection.includes(item.id)) {
+                    return {
+                        ...item,
+                        layer: {
+                            ...item.layer,
+                            x: item.layer.x + offset.x,
+                            y: item.layer.y + offset.y,
+                        }
+                    };
+                }
+                return item;
+            }));
+            // Crucial: Update the reference point for the next move tick
+            setCanvasState({ mode: CanvasMode.Translating, current: coords });
+        }
+    
+        // --- CURSOR SYNC ---
+        const now = Date.now();
+        if (now - lastSentRef.current < 30) return;
+        lastSentRef.current = now;
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: "CURSOR_MOVE",
+                content: { x: Math.round(e.clientX), y: Math.round(e.clientY), name: user?.name || "Anonymous" }
+            }));
+        }
+    }, [canvasState, selection, clientToWorld, user?.name]);
+
 
     return (
         <main 
             className="h-full w-full relative bg-neutral-100 touch-none overflow-hidden"
             onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp} // <--- ADD THIS
         >
             <Info id={id} title={title}/>
             <Members id={id} />
@@ -414,14 +464,13 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                 canRedo={canRedo} 
             />
 
-                <svg
-                    ref={svgRef}
-                    className="h-screen w-screen bg-neutral-100 touch-none"
-                    onPointerDown={onSvgPointerDown}
-                    onPointerMove={onSvgPointerMove}
-                    onPointerUp={onSvgPointerUp}
-                    // onWheel={onWheel} <-- REMOVE THIS
-                >
+            <svg
+                ref={svgRef}
+                className="h-screen w-screen bg-neutral-100 touch-none"
+                onPointerDown={onSvgPointerDown}
+                onPointerMove={onSvgPointerMove}
+                onPointerUp={onSvgPointerUp} // This handles new layer insertion
+            >
                     <g 
                         style={{
                             // translate first, then scale
@@ -448,6 +497,12 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                             selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
                         />
                     ))}
+
+                    <SelectionBox
+                        bounds={selectionBounds} 
+                        onResizeHandlePointerDown={onResizeHandlePointerDown}
+                        isShowingHandles={selection.length === 1} // Only show handles when one item is selected
+                    />
 
                     <CursorPresence cursors={otherCursors} />
                 </g>
