@@ -71,3 +71,8 @@ export function getSvgPathFromStroke(stroke: number[][]) {
 
   return `${d} Z`; // The "Z" closes the path for the freehand look
 }
+
+export function getContrastingTextColor(color: { r: number; g: number; b: number }) {
+    const yiq = (color.r * 299 + color.g * 587 + color.b * 114) / 1000;
+    return yiq >= 128 ? "black" : "white";
+}
