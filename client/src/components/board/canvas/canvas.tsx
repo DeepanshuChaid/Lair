@@ -10,66 +10,49 @@ import Members from "../members/members";
 import Toolbar from "../toolbar/toolbar";
 import { CursorPresence } from "../cursor-presence";
 import { useAuth } from "@/providers/auth-provider";
-import {LayerPreview} from "../layer-preview";
+import { LayerPreview } from "../layer-preview";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Rectangle as RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
-import { cssToColor,ColorToCss } from "@/lib/utils";
+import { ColorToCss } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
-import { uuidv4 } from "zod";
 import { Path } from "../boardTools/path";
 
 const MAX_LAYERS = 500;
 
-export default function Canvas({id, title}: {id: string, title: string}) {
+export default function Canvas({ id, title }: { id: string, title: string }) {
     const [canvasState, setCanvasState] = useState<CanvasState>({ mode: CanvasMode.None });
-    const { undo, redo, canUndo, canRedo, saveState, currentState, history } = useHistory();
+    const { undo, redo, canUndo, canRedo, saveState, currentState } = useHistory();
 
-    const router = useRouter()
-
+    const router = useRouter();
     const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
+    const [lastUsedColor, setLastUsedColor] = useState<color>({ r: 252, g: 142, b: 42 })
 
-    const [lastUsedColor, setLastUsedColor] = useState<color>({
-        r: 0,
-        b: 255,
-        g: 0,
-    });
-
-    const {user} = useAuth();
-    
-    // State to track other users' cursors
-    const [otherCursors, setOtherCursors] = useState<Record<string, {x: number, y: number, name: string}>>({});
+    const { user } = useAuth();
+    const [otherCursors, setOtherCursors] = useState<Record<string, { x: number, y: number, name: string }>>({});
     const wsRef = useRef<WebSocket | null>(null);
-    const lastSentRef = useRef<number>(0); 
+    const lastSentRef = useRef<number>(0);
 
-    // Frontend-only rectangle layers (no websocket persistence yet).
-    const [rectangleLayers, setRectangleLayers] = useState<
-        Array<{ id: string; layer: RectangleLayer }>
-    >([]);
-    const [draftRectangleLayer, setDraftRectangleLayer] = useState<
-        { id: string; layer: RectangleLayer } | null
-    >(null);
+    const [rectangleLayers, setRectangleLayers] = useState<Array<{ id: string; layer: any }>>([]);
+    const [draftRectangleLayer, setDraftRectangleLayer] = useState<{ id: string; layer: any } | null>(null);
 
     const svgRef = useRef<SVGSVGElement | null>(null);
     const insertingStartRef = useRef<Point | null>(null);
     const rectIdCounterRef = useRef(0);
     const didInitHistoryRef = useRef(false);
 
+    // --- WEBSOCKET SETUP ---
     useEffect(() => {
         let isCancelled = false;
         const setup = async () => {
             try {
                 const { socket, error } = await connectSocket(id);
                 if (error !== null) {
-                    toast({
-                        title: "Error",
-                        description: error,
-                        variant: "destructive",
-                    })
-                    router.push("/")
+                    toast({ title: "Error", description: error, variant: "destructive" });
+                    router.push("/");
                     return;
                 }
                 if (isCancelled) { socket.close(); return; }
@@ -77,12 +60,10 @@ export default function Canvas({id, title}: {id: string, title: string}) {
 
                 socket.onmessage = (event: any) => {
                     const data = JSON.parse(event.data);
-                    
-                    // If we receive a cursor move from someone else
                     if (data.type === "CURSOR_MOVE") {
                         setOtherCursors((prev) => ({
                             ...prev,
-                            [data.userId]: data.content // content is {x, y}
+                            [data.userId]: data.content
                         }));
                     }
                 };
@@ -90,511 +71,324 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         };
         setup();
         return () => { isCancelled = true; wsRef.current?.close(); };
-    }, [id]);
+    }, [id, router]);
 
-    // Seed history with an initial empty snapshot so undo returns to "no rectangles".
+    // --- HISTORY SNAPSHOTS ---
     useEffect(() => {
         if (didInitHistoryRef.current) return;
         didInitHistoryRef.current = true;
         saveState(JSON.stringify([]));
     }, [saveState]);
 
-    // Apply history snapshots to the current frontend-only rectangle layers.
     useEffect(() => {
         if (currentState === undefined) return;
-
         try {
-            const parsed = JSON.parse(currentState) as Array<{ id: string; layer: RectangleLayer }>;
-            if (Array.isArray(parsed)) {
-                setRectangleLayers(parsed);
-            }
-        } catch {
-            // If history contains unexpected data, don't crash the UI.
+            const parsed = JSON.parse(currentState);
+            if (Array.isArray(parsed)) setRectangleLayers(parsed);
+        } catch { 
+            // Silent fail for malformed history
         } finally {
-            // Never keep a stale draft while undo/redo changes the canvas.
             insertingStartRef.current = null;
             setDraftRectangleLayer(null);
         }
     }, [currentState]);
 
-    // Keyboard shortcuts for frontend undo/redo.
+    // --- KEYBOARD SHORTCUTS ---
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
-            // Avoid interfering with typing.
             const target = e.target as HTMLElement | null;
-            const tag = target?.tagName?.toLowerCase();
-            const isTypingContext =
-                tag === "input" || tag === "textarea" || !!target?.isContentEditable;
-            if (isTypingContext) return;
-
+            if (target?.tagName?.toLowerCase() === "input" || target?.tagName?.toLowerCase() === "textarea" || target?.isContentEditable) return;
             if (!e.ctrlKey) return;
-            if (e.repeat) return;
-
-            if (e.key === "z" || e.key === "Z") {
-                e.preventDefault();
-                undo();
-                return;
-            }
-
-            if (e.key === "y" || e.key === "Y") {
-                e.preventDefault();
-                redo();
-                return;
-            }
+            if (e.key === "z" || e.key === "Z") { e.preventDefault(); undo(); }
+            if (e.key === "y" || e.key === "Y") { e.preventDefault(); redo(); }
         };
-
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [undo, redo]);
 
-    // If the user switches tools mid-drag, cancel the current rectangle preview.
-    useEffect(() => {
-        if (canvasState.mode !== CanvasMode.Inserting || canvasState.layerType !== "Rectangle") {
-            insertingStartRef.current = null;
-            setDraftRectangleLayer(null);
-        }
-    }, [canvasState]);
-
+    // --- CAMERA / ZOOM LOGIC ---
     const onWheel = useCallback((e: WheelEvent) => {
         e.preventDefault();
-    
         if (e.ctrlKey || e.metaKey) {
-            // --- ZOOM LOGIC (Keep as is) ---
             const zoomSpeed = 0.001;
             const delta = -e.deltaY;
             const scaleChange = delta * zoomSpeed;
-            
             setCamera((prev) => {
                 const newScale = Math.min(Math.max(prev.scale + scaleChange, 0.1), 10);
-                const mouseX = e.clientX;
-                const mouseY = e.clientY;
-                
-                const dx = (mouseX - prev.x) * (newScale / prev.scale - 1);
-                const dy = (mouseY - prev.y) * (newScale / prev.scale - 1);
-    
-                return {
-                    x: prev.x - dx,
-                    y: prev.y - dy,
-                    scale: newScale,
-                };
+                const dx = (e.clientX - prev.x) * (newScale / prev.scale - 1);
+                const dy = (e.clientY - prev.y) * (newScale / prev.scale - 1);
+                return { x: prev.x - dx, y: prev.y - dy, scale: newScale };
             });
         } else {
-            // --- PAN LOGIC WITH SHIFT-SCROLL ---
-            setCamera((prev) => {
-                if (e.shiftKey) {
-                    // If Shift is held, vertical scroll (deltaY) moves the camera horizontally
-                    return {
-                        ...prev,
-                        x: prev.x - e.deltaY, 
-                        y: prev.y - e.deltaX, // deltaX might still exist from a trackpad
-                    };
-                }
-                
-                // Standard behavior
-                return {
-                    ...prev,
-                    x: prev.x - e.deltaX,
-                    y: prev.y - e.deltaY,
-                };
-            });
+            setCamera((prev) => ({
+                ...prev,
+                x: prev.x - (e.shiftKey ? e.deltaY : e.deltaX),
+                y: prev.y - (e.shiftKey ? e.deltaX : e.deltaY),
+            }));
         }
     }, []);
 
     useEffect(() => {
         const svg = svgRef.current;
         if (!svg) return;
-    
-        // Attach native event listener with passive: false
-        const handleWheel = (e: WheelEvent) => onWheel(e);
-        
-        svg.addEventListener("wheel", handleWheel, { passive: false });
-        return () => svg.removeEventListener("wheel", handleWheel);
+        svg.addEventListener("wheel", onWheel, { passive: false });
+        return () => svg.removeEventListener("wheel", onWheel);
     }, [onWheel]);
 
-    const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
+    const clientToWorld = useCallback((clientX: number, clientY: number) => {
+        const bounds = svgRef.current?.getBoundingClientRect();
+        return {
+            x: (clientX - (bounds?.left ?? 0) - camera.x) / camera.scale,
+            y: (clientY - (bounds?.top ?? 0) - camera.y) / camera.scale,
+        };
+    }, [camera]);
 
-    const clientToWorld = useCallback(
-        (clientX: number, clientY: number) => {
-            const bounds = svgRef.current?.getBoundingClientRect();
-            const left = bounds?.left ?? 0;
-            const top = bounds?.top ?? 0;
-            
-            return {
-                // Subtract camera offset, then scale it
-                x: (clientX - left - camera.x) / camera.scale,
-                y: (clientY - top - camera.y) / camera.scale,
-            };
-        },
-        [camera.x, camera.y, camera.scale] // Add scale to dependencies
-    );
-
+    // --- POINTER EVENTS ---
     const onSvgPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         const coords = clientToWorld(e.clientX, e.clientY);
-    
-        // 1. Handle Insertion (Drawing new rectangles)
         if (canvasState.mode === CanvasMode.Inserting) {
             insertingStartRef.current = coords;
-            return;
-        }
-    
-        // 2. Handle Selection (Clicking the background)
-        if (canvasState.mode === CanvasMode.None) {
-            setSelection([]); 
+        } else if (canvasState.mode === CanvasMode.None) {
+            setSelection([]);
             setCanvasState({ mode: CanvasMode.SelectionNet, origin: coords });
-            return;
-        }
-
-        if (canvasState.mode === CanvasMode.Pencil) {
+        } else if (canvasState.mode === CanvasMode.Pencil) {
             setCanvasState({
                 mode: CanvasMode.Pencil,
-                // Ensure we start a fresh array
                 pencilPoints: [[coords.x, coords.y, e.pressure || 0.5]],
             });
-            return;
         }
     }, [canvasState, clientToWorld]);
 
     const onSvgPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         const coords = clientToWorld(e.clientX, e.clientY);
 
-        // 1. Pencil Drawing Logic
-        if (canvasState.mode === CanvasMode.Pencil) {
-            setCanvasState((prev) => {
-                if (prev.mode !== CanvasMode.Pencil || !prev.pencilPoints) return prev;
-                return {
-                    ...prev,
-                    pencilPoints: [...prev.pencilPoints, [coords.x, coords.y, e.pressure || 0.5]],
-                };
-            });
-            return;
-        }
-
-        // 2. Shape Insertion Logic
-        if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
+        if (canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints) {
+            setCanvasState((prev) => ({
+                ...prev,
+                mode: CanvasMode.Pencil,
+                pencilPoints: [...(prev as any).pencilPoints, [coords.x, coords.y, e.pressure || 0.5]],
+            }));
+        } else if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
             const start = insertingStartRef.current;
-            const x = Math.min(start.x, coords.x);
-            const y = Math.min(start.y, coords.y);
-            const width = Math.abs(coords.x - start.x);
-            const height = Math.abs(coords.y - start.y);
-
             setDraftRectangleLayer({
                 id: "draft",
                 layer: {
                     type: canvasState.layerType,
-                    x, y, width, height,
+                    x: Math.min(start.x, coords.x),
+                    y: Math.min(start.y, coords.y),
+                    width: Math.abs(coords.x - start.x),
+                    height: Math.abs(coords.y - start.y),
                     fill: lastUsedColor,
-                } as any,
+                },
             });
         }
     }, [canvasState, clientToWorld, lastUsedColor]);
 
-    const onSvgPointerUp = useCallback(
-        (e: React.PointerEvent<SVGSVGElement>) => {
-            const { mode } = canvasState;
+    const onSvgPointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+        const coords = clientToWorld(e.clientX, e.clientY);
 
-            // --- EXISTING SHAPE INSERTION LOGIC ---
-            if (mode === CanvasMode.Inserting && insertingStartRef.current) {
-                // ... (keep your existing rectangle/ellipse logic here)
-                // ...
-                return;
-            }
-
-            // --- NEW PENCIL SAVING LOGIC ---
-            if (mode === CanvasMode.Pencil && canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
-                const newId = `layer-${rectIdCounterRef.current++}`;
-                
-                // Create the new Path layer
-                const newLayer = {
-                    id: newId,
-                    layer: {
-                        type: layerType.Path,
-                        // Use a helper to find the top-left of the drawn points
-                        x: 0, 
-                        y: 0,
-                        width: 0, // Paths often use internal point logic for width
-                        height: 0,
-                        fill: lastUsedColor,
-                        points: canvasState.pencilPoints,
-                    } as any,
-                };
-
-                const nextLayers = [...rectangleLayers, newLayer];
-
-                // Save to state and history
+        // --- PENCIL FINALIZATION ---
+        if (canvasState.mode === CanvasMode.Pencil) {
+            if (canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
+                const newId = `path-${rectIdCounterRef.current++}`;
+                const nextLayers = [
+                    ...rectangleLayers,
+                    {
+                        id: newId,
+                        layer: {
+                            type: layerType.Path,
+                            x: 0, y: 0, width: 0, height: 0,
+                            fill: lastUsedColor,
+                            points: canvasState.pencilPoints,
+                        }
+                    }
+                ];
                 setRectangleLayers(nextLayers);
                 saveState(JSON.stringify(nextLayers));
+            }
+            setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
+            return;
+        }
 
-                // Reset pencil state but keep the mode if you want to continue drawing
-                setCanvasState({ 
-                    mode: CanvasMode.Pencil, 
-                    pencilPoints: [] 
-                });
-                return;
+        // --- SHAPE FINALIZATION ---
+        if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
+            const start = insertingStartRef.current;
+            let width = Math.abs(coords.x - start.x);
+            let height = Math.abs(coords.y - start.y);
+            let x = Math.min(start.x, coords.x);
+            let y = Math.min(start.y, coords.y);
+
+            if (width < 5 && height < 5) {
+                width = 100; height = 100;
+                x = start.x - 50; y = start.y - 50;
             }
 
+            const nextLayers = [
+                ...rectangleLayers,
+                {
+                    id: `layer-${rectIdCounterRef.current++}`,
+                    layer: { type: canvasState.layerType, x, y, width, height, fill: lastUsedColor, value: "" }
+                }
+            ];
+            setRectangleLayers(nextLayers);
+            saveState(JSON.stringify(nextLayers));
+            insertingStartRef.current = null;
+            setDraftRectangleLayer(null);
             setCanvasState({ mode: CanvasMode.None });
-        },
-        [canvasState, rectangleLayers, lastUsedColor, saveState, clientToWorld]
-    );
+        }
+    }, [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState]);
 
-    const [selection, setSelection] = useState<string[]>([]); // Array of selected layer IDs
-
-    // Helper to get bounds of selected layers for the SelectionBox
+    const [selection, setSelection] = useState<string[]>([]);
+    
     const selectionBounds = useMemo(() => {
         const selectedLayers = rectangleLayers.filter(l => selection.includes(l.id));
         if (selectedLayers.length === 0) return null;
-
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
         selectedLayers.forEach(({ layer }) => {
-            minX = Math.min(minX, layer.x);
-            minY = Math.min(minY, layer.y);
-            maxX = Math.max(maxX, layer.x + layer.width);
-            maxY = Math.max(maxY, layer.y + layer.height);
+            minX = Math.min(minX, layer.x); minY = Math.min(minY, layer.y);
+            maxX = Math.max(maxX, layer.x + layer.width); maxY = Math.max(maxY, layer.y + layer.height);
         });
-
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }, [selection, rectangleLayers]);
 
-
     const onLayerPointerDown = useCallback((e: React.PointerEvent, layerId: string) => {
         if (canvasState.mode === CanvasMode.Inserting || canvasState.mode === CanvasMode.Pencil) return;
-    
-        e.stopPropagation(); // Prevent the SVG background from clearing selection
-        
+        e.stopPropagation();
         const coords = clientToWorld(e.clientX, e.clientY);
-        
-        // If shift isn't held, clear other selections
-        if (!e.shiftKey) {
-            setSelection([layerId]);
-        } else {
-            setSelection(prev => prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]);
-        }
-    
+        setSelection(e.shiftKey ? (prev => prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]) : [layerId]);
         setCanvasState({ mode: CanvasMode.Translating, current: coords });
     }, [canvasState.mode, clientToWorld]);
 
-    const onResizeHandlePointerDown = useCallback((corner: Side, initialBounds: XYMH) => {
-        setCanvasState({
-            mode: CanvasMode.Resizing,
-            initialBounds,
-            corner,
-        });
-    }, []);
-
-    const onPointerUp = useCallback(() => {
-        if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
-            // This pushes the final position to your Undo/Redo history
-            saveState(JSON.stringify(rectangleLayers));
-        }
-        
-        // Reset the mode so the cursor doesn't "stick" to the object
-        setCanvasState({ mode: CanvasMode.None });
-    }, [canvasState.mode, rectangleLayers, saveState]);
-
-    // THROTTLED MOUSE MOVE
     const onPointerMove = useCallback((e: React.PointerEvent) => {
         const coords = clientToWorld(e.clientX, e.clientY);
-    
-        // --- RESIZING LOGIC ---
         if (canvasState.mode === CanvasMode.Resizing && selection.length === 1) {
             const { initialBounds, corner } = canvasState;
             setRectangleLayers((prev) => prev.map((item) => {
                 if (item.id === selection[0]) {
                     let { x, y, width, height } = initialBounds;
-                    if ((corner & Side.top) === Side.top) {
-                        y = Math.min(coords.y, initialBounds.y + initialBounds.height);
-                        height = Math.abs(initialBounds.y + initialBounds.height - coords.y);
-                    }
-                    if ((corner & Side.bottom) === Side.bottom) {
-                        y = Math.min(coords.y, initialBounds.y);
-                        height = Math.abs(coords.y - initialBounds.y);
-                    }
-                    if ((corner & Side.left) === Side.left) {
-                        x = Math.min(coords.x, initialBounds.x + initialBounds.width);
-                        width = Math.abs(initialBounds.x + initialBounds.width - coords.x);
-                    }
-                    if ((corner & Side.right) === Side.right) {
-                        x = Math.min(coords.x, initialBounds.x);
-                        width = Math.abs(coords.x - initialBounds.x);
-                    }
+                    if ((corner & Side.top) === Side.top) { y = Math.min(coords.y, initialBounds.y + initialBounds.height); height = Math.abs(initialBounds.y + initialBounds.height - coords.y); }
+                    if ((corner & Side.bottom) === Side.bottom) { y = Math.min(coords.y, initialBounds.y); height = Math.abs(coords.y - initialBounds.y); }
+                    if ((corner & Side.left) === Side.left) { x = Math.min(coords.x, initialBounds.x + initialBounds.width); width = Math.abs(initialBounds.x + initialBounds.width - coords.x); }
+                    if ((corner & Side.right) === Side.right) { x = Math.min(coords.x, initialBounds.x); width = Math.abs(coords.x - initialBounds.x); }
                     return { ...item, layer: { ...item.layer, x, y, width, height } };
                 }
                 return item;
             }));
-        }
-    
-        // --- TRANSLATING (MOVING) LOGIC ---
-        if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
-            const offset = {
-                x: coords.x - canvasState.current.x,
-                y: coords.y - canvasState.current.y,
-            };
-    
-            setRectangleLayers((prev) => prev.map((item) => {
-                if (selection.includes(item.id)) {
-                    return {
-                        ...item,
-                        layer: {
-                            ...item.layer,
-                            x: item.layer.x + offset.x,
-                            y: item.layer.y + offset.y,
-                        }
-                    };
-                }
-                return item;
-            }));
-            // Crucial: Update the reference point for the next move tick
+        } else if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
+            const offset = { x: coords.x - canvasState.current.x, y: coords.y - canvasState.current.y };
+            setRectangleLayers((prev) => prev.map((item) => selection.includes(item.id) ? { ...item, layer: { ...item.layer, x: item.layer.x + offset.x, y: item.layer.y + offset.y } } : item));
             setCanvasState({ mode: CanvasMode.Translating, current: coords });
         }
-    
-        // --- CURSOR SYNC ---
+
         const now = Date.now();
-        if (now - lastSentRef.current < 30) return;
-        lastSentRef.current = now;
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
-                type: "CURSOR_MOVE",
-                content: { x: Math.round(e.clientX), y: Math.round(e.clientY), name: user?.name || "Anonymous" }
-            }));
+        if (now - lastSentRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+            lastSentRef.current = now;
+            wsRef.current.send(JSON.stringify({ type: "CURSOR_MOVE", content: { x: Math.round(e.clientX), y: Math.round(e.clientY), name: user?.name || "Anonymous" } }));
         }
     }, [canvasState, selection, clientToWorld, user?.name]);
 
-
-    // Inside your Canvas component
-    const setFill = useCallback((fill: color) => {
-        setLastUsedColor(fill);
-
-        // If there are items selected, update their color immediately
-        if (selection.length > 0) {
-            setRectangleLayers((prev) => prev.map((item) => {
-                if (selection.includes(item.id)) {
-                    return {
-                        ...item,
-                        layer: { ...item.layer, fill }
-                    };
-                }
-                return item;
-            }));
-
-            // Push to history after the change
-            saveState(JSON.stringify(rectangleLayers));
-        }
-    }, [selection, rectangleLayers, saveState]);
-
+    const onPointerUp = useCallback(() => {
+        if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) saveState(JSON.stringify(rectangleLayers));
+        setCanvasState({ mode: CanvasMode.None });
+    }, [canvasState.mode, rectangleLayers, saveState]);
 
     const onChangeColor = useCallback((fill: color) => {
         setLastUsedColor(fill);
-
         if (selection.length > 0) {
-            // 1. Calculate the new state immediately
-            const nextLayers = rectangleLayers.map((item) => {
-                if (selection.includes(item.id)) {
-                    return { 
-                        ...item, 
-                        layer: { ...item.layer, fill: fill } 
-                    };
-                }
-                return item;
-            });
-
-            // 2. Update the board
+            const nextLayers = rectangleLayers.map((item) => selection.includes(item.id) ? { ...item, layer: { ...item.layer, fill } } : item);
             setRectangleLayers(nextLayers);
-
-            // 3. Save to history using the fresh data (not the old state)
             saveState(JSON.stringify(nextLayers));
         }
     }, [selection, rectangleLayers, saveState]);
 
-
-
-    useEffect(() => {
-        console.log("reactangleLayer :", rectangleLayers)
-        // console.log('history :',  history)
-        console.log("currentState :", currentState)
-    })
-
+    const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
 
     return (
         <main 
-            className="h-full w-full relative bg-neutral-100 touch-none overflow-hidden"
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp} // <--- ADD THIS
+            className="h-full w-full relative bg-neutral-100 touch-none overflow-hidden" 
+            onPointerMove={onPointerMove} 
+            onPointerUp={onPointerUp}
         >
-            <Info id={id} title={title}/>
+            <Info id={id} title={title} />
             <Members id={id} />
-            <Toolbar  
-                canvasState={canvasState}
-                setCanvasState={setCanvasState}
-                undo={undo}
-                redo={redo}
-                canUndo={canUndo}
-                canRedo={canRedo}
-                lastUsedColor={lastUsedColor}
-                onChangeColor={onChangeColor} // This will now handle the {r, g, b} object
+            <Toolbar 
+                canvasState={canvasState} 
+                setCanvasState={setCanvasState} 
+                undo={undo} 
+                redo={redo} 
+                canUndo={canUndo} 
+                canRedo={canRedo} 
+                lastUsedColor={lastUsedColor} 
+                onChangeColor={onChangeColor} 
             />
 
-            <svg
-                ref={svgRef}
-                className="h-screen w-screen bg-neutral-100 touch-none"
-                onPointerDown={onSvgPointerDown}
-                onPointerMove={onSvgPointerMove}
-                onPointerUp={onSvgPointerUp} // This handles new layer insertion
+            <svg 
+                ref={svgRef} 
+                className="h-screen w-screen bg-neutral-100 touch-none" 
+                onPointerDown={onSvgPointerDown} 
+                onPointerMove={onSvgPointerMove} 
+                onPointerUp={onSvgPointerUp}
             >
-                    <g 
-                        style={{
-                            // translate first, then scale
-                            transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
-                            transformOrigin: "0 0", // Crucial for manual math
-                        }}
-                    >
+                <g style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`, transformOrigin: "0 0" }}>
+                    
+                    {/* 1. Rendering the active draft (Rectangle/Ellipse) */}
                     {draftRectangleLayer && (
                         draftRectangleLayer.layer.type === layerType.Ellipse ? (
                             <Ellipse 
-                                id={draftRectangleLayer.id}
-                                layer={draftRectangleLayer.layer as any}
-                                onPointerDown={() => {}}
-                                selectionColor={strokeColor}
+                                id={draftRectangleLayer.id} 
+                                layer={draftRectangleLayer.layer} 
+                                onPointerDown={() => {}} 
+                                selectionColor={strokeColor} 
                             />
                         ) : (
-                            <RectangleTool
-                                id={draftRectangleLayer.id}
-                                layer={draftRectangleLayer.layer as any}
-                                onPointerDown={() => {}}
-                                selectionColor={strokeColor}
+                            <RectangleTool 
+                                id={draftRectangleLayer.id} 
+                                layer={draftRectangleLayer.layer} 
+                                onPointerDown={() => {}} 
+                                selectionColor={strokeColor} 
                             />
                         )
                     )}
 
+                    {/* 2. Rendering all established layers */}
                     {rectangleLayers.map(({ id: layerId, layer }) => {
+                        // Shared props excluding the 'key'
+                        const selectionColor = selection.includes(layerId) ? strokeColor : "transparent";
+                        
+                        // Handle specific layer types
                         if (layer.type === layerType.Rectangle) {
                             return (
-                                <RectangleTool
-                                    key={layerId}
-                                    id={layerId}
-                                    layer={layer}
+                                <RectangleTool 
+                                    key={layerId} 
+                                    id={layerId} 
+                                    layer={layer} 
                                     onPointerDown={onLayerPointerDown} 
-                                    selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
+                                    selectionColor={selectionColor} 
                                 />
                             );
-                        } else if (layer.type === layerType.Ellipse) {
+                        } 
+                        
+                        if (layer.type === layerType.Ellipse) {
                             return (
-                                <Ellipse
-                                    key={layerId}
-                                    id={layerId}
-                                    layer={layer}
-                                    onPointerDown={onLayerPointerDown}
-                                    selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
+                                <Ellipse 
+                                    key={layerId} 
+                                    id={layerId} 
+                                    layer={layer} 
+                                    onPointerDown={onLayerPointerDown} 
+                                    selectionColor={selectionColor} 
                                 />
                             );
-                        } else if (layer.type === layerType.Note) {
+                        }
+
+                        if (layer.type === layerType.Note || layer.type === layerType.Text) {
+                            const Component = layer.type === layerType.Note ? Note : Text;
                             return (
-                                <Note
+                                <Component
                                     key={layerId}
                                     id={layerId}
                                     layer={layer as any}
                                     onPointerDown={onLayerPointerDown}
-                                    selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
+                                    selectionColor={selectionColor}
                                     onValueChange={(newValue) => {
                                         const nextLayers = rectangleLayers.map((l) => 
                                             l.id === layerId ? { ...l, layer: { ...l.layer, value: newValue } } : l
@@ -603,25 +397,10 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                                         saveState(JSON.stringify(nextLayers));
                                     }}
                                 />
-                            ) 
-                        } else if (layer.type === layerType.Text) {
-                        return (
-                                <Text
-                                    key={layerId}
-                                    id={layerId}
-                                    layer={layer as any}
-                                    onPointerDown={onLayerPointerDown}
-                                    selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
-                                    onValueChange={(newValue) => {
-                                        const nextLayers = rectangleLayers.map((l) => 
-                                            l.id === layerId ? { ...l, layer: { ...l.layer, value: newValue } } : l
-                                        );
-                                        setRectangleLayers(nextLayers);
-                                        saveState(JSON.stringify(nextLayers)); // Saves to Undo/Redo history
-                                    }}
-                                />
                             );
-                        } else if (layer.type === layerType.Path) {
+                        }
+
+                        if (layer.type === layerType.Path) {
                             return (
                                 <Path
                                     key={layerId}
@@ -630,15 +409,17 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                                     x={layer.x}
                                     y={layer.y}
                                     fill={layer.fill ? ColorToCss(layer.fill) : "#000"}
-                                    stroke={selection.includes(layerId) ? strokeColor : "transparent"}
+                                    stroke={selectionColor}
                                 />
                             );
                         }
+
                         return null;
                     })}
 
+                    {/* 3. Rendering the live pencil stroke */}
                     {canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints && (
-                        <Path
+                        <Path 
                             points={canvasState.pencilPoints} 
                             fill={ColorToCss(lastUsedColor)} 
                             x={0} 
@@ -646,10 +427,16 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                         />
                     )}
 
-                    <SelectionBox
+                    <SelectionBox 
                         bounds={selectionBounds} 
-                        onResizeHandlePointerDown={onResizeHandlePointerDown}
-                        isShowingHandles={selection.length === 1} // Only show handles when one item is selected
+                        onResizeHandlePointerDown={(corner, bounds) => 
+                            setCanvasState({ 
+                                mode: CanvasMode.Resizing, 
+                                initialBounds: bounds, 
+                                corner 
+                            })
+                        }
+                        isShowingHandles={selection.length === 1} 
                     />
 
                     <CursorPresence cursors={otherCursors} />
@@ -657,5 +444,4 @@ export default function Canvas({id, title}: {id: string, title: string}) {
             </svg>
         </main>
     );
-} 
-
+}
