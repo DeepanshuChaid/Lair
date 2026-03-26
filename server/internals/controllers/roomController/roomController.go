@@ -355,16 +355,15 @@ func GetRoomMembers() gin.HandlerFunc {
 			Members      json.RawMessage `json:"members"` // Scan the whole JSON array here
 		}
 
-		cachedData, err := cache.Get(ctx, "members:"+roomId)
-		if err == nil {
-			if err := json.Unmarshal([]byte(cachedData), &room); err == nil {
-				c.JSON(http.StatusOK, gin.H{
-					"rooms":   cachedData,
-					"cached":  true,
-				})
-				return
-			}
-		}
+		// 1. CACHE CHECK
+        val, err := cache.Get(ctx, "members:"+roomId)
+        if err == nil {
+            // val is the stringified 'room' object. 
+            // We wrap it in the "room" key manually to avoid double-marshaling.
+            c.Header("Content-Type", "application/json")
+            c.String(http.StatusOK, `{"room": %s}`, val) 
+            return
+        }
 
 		// Using a single query to get Room + State + Members array
 		// We use COALESCE to handle rooms that might not have members yet
@@ -402,8 +401,12 @@ func GetRoomMembers() gin.HandlerFunc {
 			cache.Set(ctx, "members:"+roomId, stringifiedData, 5*time.Hour)
 		}
 
+		// Return the 'room' object directly so it matches the cached structure
+		c.JSON(http.StatusOK, room)
+
 		c.JSON(http.StatusOK, gin.H{
 			"room":    room,
+			"cached": false,
 		})
 	}
 }

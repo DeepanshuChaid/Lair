@@ -84,6 +84,7 @@ export const RoomCard = ({ room }: { room: Room }) => {
         description: `${variables.email} Added to the Room`, 
         variant: "success" 
       })
+      queryClient.invalidateQueries({ queryKey: [`members:${room.id}`] });
       setMemberDialogOpen(false)
       reset() // Reset form after success
     },

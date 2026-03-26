@@ -21,6 +21,8 @@ export default function Members({id}: {id: string}) {
             const {data} = await API.get(`/api/room/get-members/${id}`) 
             return data.room.members
         },
+        staleTime: 5 * 60 * 1000, // Consider data "fresh" for 5 mins (won't refetch on window focus)
+        refetchInterval: 10000,
     })
     
     if (isLoading) return <MembersSkeleton />
