@@ -28,6 +28,14 @@ const inviteSchema = z.object({
 
 type InviteFormValues = z.infer<typeof inviteSchema>
 
+interface Member {
+  id: string
+  name: string
+  email: string
+  profile_picture: string // Matches your Go 'profile_picture' field
+  role: string
+}
+
 interface ManageMembersDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -35,58 +43,94 @@ interface ManageMembersDialogProps {
   roomTitle: string
 }
 
+
 export const ManageMembers = ({ open, onOpenChange, roomId, roomTitle }: ManageMembersDialogProps) => {
   const queryClient = useQueryClient()
 
-  // --- 1. Fetch Members Logic ---
-  const { data: members, isLoading: isLoadingMembers } = useQuery<any>({
+  const { data, isLoading: isLoadingMembers } = useQuery({
     queryKey: ["members", roomId],
     queryFn: async () => {
       const res = await API.get(`/api/room/get-members/${roomId}`)
-      return res.data
+      return res.data?.room ? res.data.room : res.data
     },
-    enabled: open, // Only fetch when the dialog is actually open
+    enabled: open,
+    placeholderData: (previousData) => previousData, // Prevents the "No members" flicker
   })
+
+  const membersList: Member[] = data?.members || []
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<InviteFormValues>({
     resolver: zodResolver(inviteSchema),
     defaultValues: { email: "" },
   })
 
-  // --- 2. Add Member Mutation ---
+  // --- 2. Add Member ---
   const addMemberMutation = useMutation({
-    mutationFn: async (data: InviteFormValues) => {
-      return await API.post(`/api/ws/add-member/${roomId}`, data)
+    mutationFn: async (formData: InviteFormValues) => {
+      return await API.post(`/api/ws/add-member/${roomId}`, formData)
+    },
+    onMutate: async (newMember) => {
+      await queryClient.cancelQueries({ queryKey: ["members", roomId] })
+      const previousData = queryClient.getQueryData(["members", roomId])
+      queryClient.setQueryData(["members", roomId], (old: any) => {
+        const existingMembers = old?.members || []
+        return {
+          ...old,
+          members: [...existingMembers, { 
+            id: Math.random().toString(),
+            email: newMember.email, 
+            name: "Adding...", 
+            role: "member" 
+          }]
+        }
+      })
+      return { previousData }
+    },
+    onError: (err: any, newMember, context) => {
+      queryClient.setQueryData(["members", roomId], context?.previousData)
+      toast({ title: "Error", description: "Failed to add member", variant: "destructive" })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["members", roomId] })
     },
     onSuccess: (_, variables) => {
-      toast({ title: "Invited!", description: `${variables.email} added.`, variant: "success" })
-      queryClient.invalidateQueries({ queryKey: ["members", roomId] })
+      toast({ title: "Success", description: `${variables.email} added.`, variant: "success" })
       reset()
+      onOpenChange(false) // Added this
     },
-    onError: (err: any) => {
-      toast({ 
-        title: "Error", 
-        description: err?.response?.data?.message || "Failed to add member", 
-        variant: "destructive" 
-      })
-    }
   })
 
-  // --- 3. Remove Member Mutation ---
+  // --- 3. Remove Member ---
   const removeMemberMutation = useMutation({
-    mutationFn: async (memberId: string) => {
-      await API.delete(`/api/ws/remove-member/${roomId}/${memberId}`)
+    mutationFn: async (email: string) => {
+      return await API.delete(`/api/ws/remove-member/${roomId}`, {
+        data: { email } 
+      })
     },
-    onSuccess: () => {
-      toast({ title: "Removed", description: "Member removed." })
+    onMutate: async (emailToRemove) => {
+      await queryClient.cancelQueries({ queryKey: ["members", roomId] })
+      const previousData = queryClient.getQueryData(["members", roomId])
+      queryClient.setQueryData(["members", roomId], (old: any) => {
+        if (!old) return old
+        return {
+          ...old,
+          members: old.members.filter((m: Member) => m.email !== emailToRemove)
+        }
+      })
+      return { previousData }
+    },
+    onError: (err: any, variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["members", roomId], context.previousData)
+      }
+      toast({ title: "Error", description: "Failed to remove member", variant: "destructive" })
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["members", roomId] })
     },
-    onError: (err: any) => {
-      toast({ 
-        title: "Error", 
-        description: err?.response?.data?.message || "Could not remove member", 
-        variant: "destructive" 
-      })
+    onSuccess: () => {
+      toast({ title: "Removed", description: "Access revoked.", variant: "success" })
+      onOpenChange(false) // Added this
     }
   })
 
@@ -96,62 +140,67 @@ export const ManageMembers = ({ open, onOpenChange, roomId, roomTitle }: ManageM
         <DialogHeader>
           <DialogTitle>Manage Members</DialogTitle>
           <DialogDescription>
-            Manage access for <span className="font-semibold text-foreground">"{roomTitle}"</span>.
+            Access control for <span className="font-semibold text-foreground">"{roomTitle}"</span>.
           </DialogDescription>
         </DialogHeader>
 
         {/* Invite Form */}
-        <form onSubmit={handleSubmit((data) => addMemberMutation.mutate(data))} className="space-y-3">
-          <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Invite Member</Label>
+        <form onSubmit={handleSubmit((d) => addMemberMutation.mutate(d))} className="space-y-3">
+          <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Invite by Email</Label>
           <div className="flex gap-2">
             <Input 
               {...register("email")} 
-              placeholder="email@example.com" 
-              className={errors.email ? "border-red-500" : ""}
+              placeholder="user@example.com" 
+              className={errors.email ? "border-red-500" : "bg-[#FAFAFA]"}
             />
-            <Button type="submit" disabled={addMemberMutation.isPending} size="sm" className="shrink-0">
+            <Button type="submit" disabled={addMemberMutation.isPending} size="sm">
               {addMemberMutation.isPending ? <Loader className="animate-spin h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
             </Button>
           </div>
-          {errors.email && <p className="text-red-500 text-[11px] font-medium">{errors.email.message}</p>}
+          {errors.email && <p className="text-red-500 text-[11px]">{errors.email.message}</p>}
         </form>
 
         <hr className="border-border" />
 
         {/* Members List */}
         <div className="space-y-3">
-          <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Current Access</Label>
-          <ScrollArea className="h-[220px] -mr-4 pr-4">
+          <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Added Members</Label>
+          <ScrollArea className="h-[250px] -mr-4 pr-4">
             <div className="flex flex-col gap-4">
-              {isLoadingMembers ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader className="animate-spin h-6 w-6 text-muted-foreground" />
+              {isLoadingMembers && !data ? (
+                <div className="flex justify-center py-10">
+                    <Loader className="animate-spin h-6 w-6 opacity-20" />
                 </div>
-              ) : members?.length === 0 ? (
-                <p className="text-center text-xs text-muted-foreground py-8">No members found.</p>
+                ) : 
+                isLoadingMembers && membersList.length === 0 ? (
+                <div className="flex justify-center py-10"><Loader className="animate-spin h-6 w-6 opacity-20" /></div>
+              ) : membersList.length === 0 ? (
+                <div className="text-center py-10 text-xs text-muted-foreground">No members yet.</div>
               ) : (
-                members?.members.map((member: any) => (
-                  <div key={member.id} className="flex items-center justify-between group">
+                membersList.map((member) => (
+                  <div key={member.id} className="flex items-center justify-between group animate-in fade-in duration-300">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9 border border-border">
                         <AvatarImage src={member.profile_picture} />
-                        <AvatarFallback className="text-[10px] font-bold bg-muted uppercase">
-                          {member.name?.charAt(0) || member.email.charAt(0)}
+                        <AvatarFallback className="text-[10px] font-bold bg-slate-100">
+                          {member.name?.charAt(0) || member.email.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col min-w-0">
-                        <p className="text-sm font-semibold truncate">{member.name || "User"}</p>
+                        <p className="text-sm font-semibold truncate leading-none mb-1">{member.name || "Pending User"}</p>
                         <p className="text-xs text-muted-foreground truncate">{member.email}</p>
                       </div>
                     </div>
+                    
                     <Button
                       variant="ghost"
                       size="icon"
+                      // Use email here instead of id
                       disabled={removeMemberMutation.isPending}
                       className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
                       onClick={() => {
-                        if(confirm(`Remove ${member.email}?`)) {
-                          removeMemberMutation.mutate(member.id)
+                        if(window.confirm(`Remove ${member.email}?`)) {
+                          removeMemberMutation.mutate(member.email)
                         }
                       }}
                     >
@@ -165,7 +214,7 @@ export const ManageMembers = ({ open, onOpenChange, roomId, roomTitle }: ManageM
         </div>
 
         <DialogFooter>
-          <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>Done</Button>
+          <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
