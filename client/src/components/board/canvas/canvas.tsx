@@ -439,6 +439,30 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         }
     }, [canvasState, selection, clientToWorld, user?.name]);
 
+
+    // Inside your Canvas component
+    const setFill = useCallback((fill: color) => {
+        setLastUsedColor(fill);
+
+        // If there are items selected, update their color immediately
+        if (selection.length > 0) {
+            setRectangleLayers((prev) => prev.map((item) => {
+                if (selection.includes(item.id)) {
+                    return {
+                        ...item,
+                        layer: { ...item.layer, fill }
+                    };
+                }
+                return item;
+            }));
+
+            // Push to history after the change
+            saveState(JSON.stringify(rectangleLayers));
+        }
+    }, [selection, rectangleLayers, saveState]);
+
+    
+
     useEffect(() => {
         console.log("reactangleLayer :", rectangleLayers)
         // console.log('history :',  history)

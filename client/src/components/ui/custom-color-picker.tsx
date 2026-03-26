@@ -1,0 +1,104 @@
+"use client";
+
+import React, { forwardRef, useMemo, useState, useEffect } from "react";
+import { HexColorPicker } from "react-colorful";
+import Image from "next/image";
+
+import { cn, ColorToCss } from "../../lib/utils";
+import { useForwardedRef } from "../../hooks/use-forward-ref";
+import { Button, type ButtonProps } from "./button";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "./popover";
+import { Input } from "./input";
+import { type color } from "../../types/canvas";
+
+interface ColorPickerProps {
+    value: string;
+    onChange: (value: string) => void;
+    onBlur?: () => void;
+    lastUsedColor: color;
+}
+
+// We extend ButtonProps but omit the ones we are overriding manually
+interface CustomPickerProps extends Omit<ButtonProps, "value" | "onChange" | "onBlur">, ColorPickerProps {}
+
+const CustomColorPicker = forwardRef<HTMLInputElement, CustomPickerProps>(
+    (
+        { disabled, value, lastUsedColor, onChange, onBlur, name, className, ...props },
+        forwardedRef
+    ) => {
+        const ref = useForwardedRef(forwardedRef);
+        const [open, setOpen] = useState(false);
+
+        const parsedValue = useMemo(() => {
+            return value || ColorToCss(lastUsedColor);
+        }, [value, lastUsedColor]);
+
+        return (
+            <Popover onOpenChange={setOpen} open={open}>
+                <PopoverTrigger asChild disabled={disabled}>
+                    <Button
+                        {...props}
+                        className={cn("p-0 overflow-hidden", className)}
+                        name={name}
+                        onBlur={onBlur}
+                        onClick={() => setOpen(true)}
+                        size="icon"
+                        variant="outline"
+                    >
+                        <Image
+                            className="object-cover"
+                            src="/color-picker.png"
+                            alt="Color Picker"
+                            height={40}
+                            width={40}
+                        />
+                    </Button>
+                </PopoverTrigger>
+                {/* Fixed sideOffset and width for better UI */}
+                <PopoverContent side="top" align="center" className="w-auto p-3">
+                    <DebouncedPicker color={parsedValue} onChange={onChange} />
+                    <Input
+                        className="mt-2 font-mono"
+                        maxLength={7}
+                        onChange={(e) => onChange(e.currentTarget.value)}
+                        ref={ref}
+                        value={parsedValue}
+                    />
+                </PopoverContent>
+            </Popover>
+        );
+    }
+);
+
+/**
+ * Native Debounced Picker to replace use-debouncy and avoid 
+ * React 19 dependency conflicts.
+ */
+const DebouncedPicker = ({ color, onChange }: { color: string; onChange: (val: string) => void }) => {
+    const [value, setValue] = useState(color);
+
+    // Sync internal state with prop changes
+    useEffect(() => {
+        setValue(color);
+    }, [color]);
+
+    // Debounce the outgoing onChange call
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (value !== color) {
+                onChange(value);
+            }
+        }, 200);
+        return () => clearTimeout(timeout);
+    }, [value, onChange, color]);
+
+    return <HexColorPicker color={value} onChange={setValue} />;
+};
+
+CustomColorPicker.displayName = "CustomColorPicker";
+
+export { CustomColorPicker };
