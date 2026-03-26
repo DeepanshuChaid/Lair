@@ -124,31 +124,31 @@ export const RoomCard = ({ room }: { room: Room }) => {
   return (
     <>
       {/* 2. THE STRETCHED LINK: Covers the whole card */}
-      <Link 
-        href={`/room/${room.id}?title=${room.title}`} 
-        className="absolute inset-0 z-0"
-        aria-label={`View room: ${room.title}`}
-      />
+      <div className="group relative flex flex-col bg-white rounded-[12px] border border-[#E5E5E5] overflow-hidden hover:shadow-md transition-all cursor-pointer">
+        {/* 1. THE STRETCHED LINK: MUST BE INSIDE THE RELATIVE DIV */}
+        <Link 
+          href={`/room/${room.id}?title=${room.title}`} 
+          className="absolute inset-0 z-10" // z-10 covers the card
+          aria-label={`View room: ${room.title}`}
+        />
 
-      <div className="group flex flex-col bg-white rounded-[12px] border border-[#E5E5E5] overflow-hidden hover:shadow-md transition-all cursor-pointer">
-        <Link href={`/room/${room.id}?title=${room.title}`}>
-          <div className="relative aspect-video bg-[#FAFAFA] border-b border-[#E5E5E5] overflow-hidden">
-            {room.thumbnail ? (
-              <img src={room.thumbnail} alt={room.title} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center opacity-20 bg-slate-100">
-                <Globe size={48} className="text-slate-400" />
-              </div>
-            )}
-
-            <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/90 backdrop-blur-sm border border-[#E5E5E5] shadow-sm">
-              {room.isPublic ? <Globe size={12} className="text-blue-600" /> : <Lock size={12} className="text-gray-600" />}
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#171717]">
-                {room.isPublic ? "Public" : "Private"}
-              </span>
+        {/* 2. THUMBNAIL AREA */}
+        <div className="relative aspect-video bg-[#FAFAFA] border-b border-[#E5E5E5] overflow-hidden">
+          {room.thumbnail ? (
+            <img src={room.thumbnail} alt={room.title} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center opacity-20 bg-slate-100">
+              <Globe size={48} className="text-slate-400" />
             </div>
+          )}
+
+          <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/90 backdrop-blur-sm border border-[#E5E5E5]">
+            {room.isPublic ? <Globe size={12} className="text-blue-600" /> : <Lock size={12} className="text-gray-600" />}
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#171717]">
+              {room.isPublic ? "Public" : "Private"}
+            </span>
           </div>
-        </Link>
+        </div>
 
         <div className="flex flex-col p-4 gap-3">
           <div className="flex items-start justify-between">
@@ -157,7 +157,7 @@ export const RoomCard = ({ room }: { room: Room }) => {
               <p className="text-[#737373] text-[12px] line-clamp-1 mt-1">{room.description}</p>
             </div>
 
-
+            {/* 3. DROPDOWN: MUST HAVE A HIGHER Z-INDEX THAN THE LINK */}
             <div className="relative z-20">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

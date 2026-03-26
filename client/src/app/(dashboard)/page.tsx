@@ -30,7 +30,7 @@ export default function DashboardPage() {
     })
 
     return (
-        <div className="flex-1 h-full p-6 max-w-7xl mx-auto flex flex-col gap-6">
+        <div className="flex-1 p-6 max-w-7xl mx-auto flex flex-col gap-6">
 
             {/* Main Content */}
             {isLoading ? (
@@ -61,3 +61,4 @@ export default function DashboardPage() {
         </div>
     )
 }
+

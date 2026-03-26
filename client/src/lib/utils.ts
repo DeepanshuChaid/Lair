@@ -1,3 +1,4 @@
+import { color } from "@/types/canvas";
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -25,4 +26,8 @@ export function connectionColor(id: string): string {
   // Use absolute value and modulo to pick a color
   const index = Math.abs(hash) % COLORS.length;
   return COLORS[index];
+}
+
+export function ColorToCss(color: color) {
+  return `${color.r.toString(16).padStart(2, "0")}${color.g.toString(16).padStart(2, "0")}${color.g.toString(16).padStart(2, "0")}`
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { CanvasMode, CanvasState, color, layerType, Point, RectangleLayer } from "@/types/canvas";
 import { useHistory } from "@/hooks/use-history";
 import { connectSocket } from "@/lib/api/websocket-api";
@@ -26,9 +26,9 @@ export default function Canvas({id, title}: {id: string, title: string}) {
     const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
 
     const [lastUsedColor, setLastUsedColor] = useState<color>({
-        r: 0,
+        r: 255,
         b: 0,
-        g: 0
+        g: 0,
     });
 
     const {user} = useAuth();
@@ -150,6 +150,29 @@ export default function Canvas({id, title}: {id: string, title: string}) {
 
     // THROTTLED MOUSE MOVE
     const onPointerMove = useCallback((e: React.PointerEvent) => {
+        const coords = clientToWorld(e.clientX, e.clientY);
+
+        if (canvasState.mode === CanvasMode.Translating && canvasState.current) {
+            const deltaX = coords.x - canvasState.current.x;
+            const deltaY = coords.y - canvasState.current.y;
+
+            setRectangleLayers((prev) => prev.map((item) => {
+                if (selection.includes(item.id)) {
+                    return {
+                        ...item,
+                        layer: {
+                            ...item.layer,
+                            x: item.layer.x + deltaX,
+                            y: item.layer.y + deltaY,
+                        }
+                    };
+                }
+                return item;
+            }));
+
+            setCanvasState({ mode: CanvasMode.Translating, current: coords });
+        }
+
         const now = Date.now();
         // Only send every 30ms (roughly 33fps) to save the Go backend
         if (now - lastSentRef.current < 30) return;
@@ -238,31 +261,22 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         [camera.x, camera.y, camera.scale] // Add scale to dependencies
     );
 
-    const onSvgPointerDown = useCallback(
-        (e: React.PointerEvent<SVGSVGElement>) => {
-            if (canvasState.mode !== CanvasMode.Inserting || canvasState.layerType !== "Rectangle") return;
-
-            // Begin a drag-to-insert rectangle.
-            const start = clientToWorld(e.clientX, e.clientY);
-            insertingStartRef.current = start;
-
-            e.currentTarget.setPointerCapture(e.pointerId);
-
-            const draftId = "draft-rectangle";
-            const draftLayer: RectangleLayer = {
-                type: layerType.Rectangle,
-                x: start.x,
-                y: start.y,
-                width: 0,
-                height: 0,
-                fill: lastUsedColor,
-            };
-            setDraftRectangleLayer({ id: draftId, layer: draftLayer });
-
-            e.preventDefault();
-        },
-        [canvasState, clientToWorld, lastUsedColor]
-    );
+    const onSvgPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+        const coords = clientToWorld(e.clientX, e.clientY);
+    
+        // 1. Handle Insertion (Drawing new rectangles)
+        if (canvasState.mode === CanvasMode.Inserting) {
+            insertingStartRef.current = coords;
+            return;
+        }
+    
+        // 2. Handle Selection (Clicking the background)
+        if (canvasState.mode === CanvasMode.None) {
+            setSelection([]); 
+            setCanvasState({ mode: CanvasMode.SelectionNet, origin: coords });
+            return;
+        }
+    }, [canvasState, clientToWorld]);
 
     const onSvgPointerMove = useCallback(
         (e: React.PointerEvent<SVGSVGElement>) => {
@@ -344,6 +358,46 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState]
     );
 
+
+
+    const [selection, setSelection] = useState<string[]>([]); // Array of selected layer IDs
+
+    // Helper to get bounds of selected layers for the SelectionBox
+    const selectionBounds = useMemo(() => {
+        const selectedLayers = rectangleLayers.filter(l => selection.includes(l.id));
+        if (selectedLayers.length === 0) return null;
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        selectedLayers.forEach(({ layer }) => {
+            minX = Math.min(minX, layer.x);
+            minY = Math.min(minY, layer.y);
+            maxX = Math.max(maxX, layer.x + layer.width);
+            maxY = Math.max(maxY, layer.y + layer.height);
+        });
+
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }, [selection, rectangleLayers]);
+
+
+    const onLayerPointerDown = useCallback((e: React.PointerEvent, layerId: string) => {
+        if (canvasState.mode === CanvasMode.Inserting || canvasState.mode === CanvasMode.Pencil) return;
+    
+        e.stopPropagation(); // Prevent the SVG background from clearing selection
+        
+        const coords = clientToWorld(e.clientX, e.clientY);
+        
+        // If shift isn't held, clear other selections
+        if (!e.shiftKey) {
+            setSelection([layerId]);
+        } else {
+            setSelection(prev => prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]);
+        }
+    
+        setCanvasState({ mode: CanvasMode.Translating, current: coords });
+    }, [canvasState.mode, clientToWorld]);
+
+
     return (
         <main 
             className="h-full w-full relative bg-neutral-100 touch-none overflow-hidden"
@@ -389,8 +443,9 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                             key={layerId}
                             id={layerId}
                             layer={layer}
-                            onPointerDown={() => {}}
-                            selectionColor={strokeColor}
+                            // Pass the actual handler here
+                            onPointerDown={onLayerPointerDown} 
+                            selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
                         />
                     ))}
 
