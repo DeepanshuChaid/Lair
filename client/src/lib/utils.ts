@@ -29,7 +29,10 @@ export function connectionColor(id: string): string {
 }
 
 export function ColorToCss(color: color) {
-  return `${color.r.toString(16).padStart(2, "0")}${color.g.toString(16).padStart(2, "0")}${color.g.toString(16).padStart(2, "0")}`
+  const r = color.r.toString(16).padStart(2, "0");
+  const g = color.g.toString(16).padStart(2, "0");
+  const b = color.b.toString(16).padStart(2, "0");
+  return `#${r}${g}${b}`;
 }
 
 export function cssToColor(css_color: string) {

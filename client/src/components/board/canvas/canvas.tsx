@@ -463,23 +463,26 @@ export default function Canvas({id, title}: {id: string, title: string}) {
     }, [selection, rectangleLayers, saveState]);
 
 
-    const onChangeColor = useCallback((fill: string) => {
-        const newColor = cssToColor(fill); 
-        setLastUsedColor(newColor);
-    
+    const onChangeColor = useCallback((fill: color) => {
+        setLastUsedColor(fill);
+
         if (selection.length > 0) {
-            setRectangleLayers((prev) => prev.map((item) => { // Changed from setLayers to setRectangleLayers
+            // 1. Calculate the new state immediately
+            const nextLayers = rectangleLayers.map((item) => {
                 if (selection.includes(item.id)) {
                     return { 
                         ...item, 
-                        layer: { ...item.layer, fill: newColor } // Note: you need to access item.layer.fill
+                        layer: { ...item.layer, fill: fill } 
                     };
                 }
                 return item;
-            }));
-    
-            // Push to history after the change
-            saveState(JSON.stringify(rectangleLayers));
+            });
+
+            // 2. Update the board
+            setRectangleLayers(nextLayers);
+
+            // 3. Save to history using the fresh data (not the old state)
+            saveState(JSON.stringify(nextLayers));
         }
     }, [selection, rectangleLayers, saveState]);
 
@@ -507,8 +510,8 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                 redo={redo}
                 canUndo={canUndo}
                 canRedo={canRedo}
-                lastUsedColor={lastUsedColor} // Pass this
-                onChangeColor={onChangeColor} // Pass this
+                lastUsedColor={lastUsedColor}
+                onChangeColor={onChangeColor} // This will now handle the {r, g, b} object
             />
 
             <svg

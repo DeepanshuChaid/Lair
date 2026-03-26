@@ -29,3 +29,4 @@ export const Ellipse = ({ id, layer, onPointerDown, selectionColor }: EllipsePro
         />
     );
 };
+
