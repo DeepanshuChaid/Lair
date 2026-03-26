@@ -17,6 +17,7 @@ import { Rectangle as RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
 import { cssToColor } from "@/lib/utils";
+import { Note } from "../boardTools/note";
 
 const MAX_LAYERS = 500;
 
@@ -567,7 +568,24 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                                     selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
                                 />
                             );
-                        }
+                        } else if (layer.type === layerType.Note) {
+                        return (
+                            <Note
+                                key={layerId}
+                                id={layerId}
+                                layer={layer as any}
+                                onPointerDown={onLayerPointerDown}
+                                selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
+                                onValueChange={(newValue) => {
+                                    const nextLayers = rectangleLayers.map((l) => 
+                                        l.id === layerId ? { ...l, layer: { ...l.layer, value: newValue } } : l
+                                    );
+                                    setRectangleLayers(nextLayers);
+                                    saveState(JSON.stringify(nextLayers));
+                                }}
+                            />
+                        );
+                    }
                         return null;
                     })}
 
