@@ -337,6 +337,34 @@ func GetRoomMembers() gin.HandlerFunc {
 		defer cancel()
 
 		roomId := c.Param("id")
+		if roomId == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "Nigga add the fkin roomID You retard!",
+			})
+			return
+		}
+
+		var room struct {
+			ID           string          `json:"id"`
+			OwnerID      string          `json:"owner_id"`
+			Title        string          `json:"title"`
+			Version      int             `json:"version"`
+			CreatedAt    time.Time       `json:"created_at"`
+			UpdatedAt    time.Time       `json:"updated_at"`
+			State        json.RawMessage `json:"state"`
+			Members      json.RawMessage `json:"members"` // Scan the whole JSON array here
+		}
+
+		cachedData, err := cache.Get(ctx, "members:"+roomId)
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedData), &room); err == nil {
+				c.JSON(http.StatusOK, gin.H{
+					"rooms":   cachedData,
+					"cached":  true,
+				})
+				return
+			}
+		}
 
 		// Using a single query to get Room + State + Members array
 		// We use COALESCE to handle rooms that might not have members yet
@@ -358,18 +386,7 @@ func GetRoomMembers() gin.HandlerFunc {
             WHERE r.id = $1
             GROUP BY r.id, rs.state;`
 
-		var room struct {
-			ID           string          `json:"id"`
-			OwnerID      string          `json:"owner_id"`
-			Title        string          `json:"title"`
-			Version      int             `json:"version"`
-			CreatedAt    time.Time       `json:"created_at"`
-			UpdatedAt    time.Time       `json:"updated_at"`
-			State        json.RawMessage `json:"state"`
-			Members      json.RawMessage `json:"members"` // Scan the whole JSON array here
-		}
-
-		err := database.Pool.QueryRow(ctx, query, roomId).Scan(
+		err = database.Pool.QueryRow(ctx, query, roomId).Scan(
 			&room.ID, &room.OwnerID, &room.Title, &room.Version,
 			&room.CreatedAt, &room.UpdatedAt, &room.State, &room.Members,
 		)
@@ -380,8 +397,12 @@ func GetRoomMembers() gin.HandlerFunc {
 			return
 		}
 
+		stringifiedData, err := json.Marshal(room)
+		if err == nil {
+			cache.Set(ctx, "members:"+roomId, stringifiedData, 5*time.Hour)
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Room fetched successfully",
 			"room":    room,
 		})
 	}

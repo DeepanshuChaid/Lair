@@ -93,6 +93,13 @@ func AddMember() gin.HandlerFunc {
 			return
 		}
 
+		err = cache.Delete(ctx, "members:"+roomId)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "Failed to delete the cache",
+			})
+		}
+
 		c.JSON(http.StatusCreated, gin.H{"message": "Member added successfully"})
 	}
 }
@@ -177,6 +184,13 @@ func RemoveMember(hub *Hub) gin.HandlerFunc {
 		}
 
 		room.Kick <- &targetUserId
+
+		err = cache.Delete(ctx, "members:"+roomId)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "Failed to delete the cache",
+			})
+		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Member removed successfully"})
 	}
