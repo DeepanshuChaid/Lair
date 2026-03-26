@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { Rectangle as RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
+import { cssToColor } from "@/lib/utils";
 
 const MAX_LAYERS = 500;
 
@@ -461,7 +462,28 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         }
     }, [selection, rectangleLayers, saveState]);
 
+
+    const onChangeColor = useCallback((fill: string) => {
+        const newColor = cssToColor(fill); 
+        setLastUsedColor(newColor);
     
+        if (selection.length > 0) {
+            setRectangleLayers((prev) => prev.map((item) => { // Changed from setLayers to setRectangleLayers
+                if (selection.includes(item.id)) {
+                    return { 
+                        ...item, 
+                        layer: { ...item.layer, fill: newColor } // Note: you need to access item.layer.fill
+                    };
+                }
+                return item;
+            }));
+    
+            // Push to history after the change
+            saveState(JSON.stringify(rectangleLayers));
+        }
+    }, [selection, rectangleLayers, saveState]);
+
+
 
     useEffect(() => {
         console.log("reactangleLayer :", rectangleLayers)
