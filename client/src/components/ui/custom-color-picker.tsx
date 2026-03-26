@@ -38,38 +38,15 @@ const CustomColorPicker = forwardRef<HTMLInputElement, CustomPickerProps>(
         }, [value, lastUsedColor]);
 
         return (
-            <Popover onOpenChange={setOpen} open={open}>
-                <PopoverTrigger asChild disabled={disabled}>
-                    <Button
-                        {...props}
-                        className={cn("p-0 overflow-hidden", className)}
-                        name={name}
-                        onBlur={onBlur}
-                        onClick={() => setOpen(true)}
-                        size="icon"
-                        variant="outline"
-                    >
-                        <Image
-                            className="object-cover"
-                            src="/color-picker.png"
-                            alt="Color Picker"
-                            height={40}
-                            width={40}
-                        />
-                    </Button>
-                </PopoverTrigger>
-                {/* Fixed sideOffset and width for better UI */}
-                <PopoverContent side="top" align="center" className="w-auto p-3">
-                    <DebouncedPicker color={parsedValue} onChange={onChange} />
-                    <Input
-                        className="mt-2 font-mono"
-                        maxLength={7}
-                        onChange={(e) => onChange(e.currentTarget.value)}
-                        ref={ref}
-                        value={parsedValue}
-                    />
-                </PopoverContent>
-            </Popover>
+            <div className="flex flex-col gap-y-2">
+                <DebouncedPicker color={parsedValue} onChange={onChange} />
+                <Input
+                    className="h-8 font-mono text-xs"
+                    maxLength={7}
+                    onChange={(e) => onChange(e.currentTarget.value)}
+                    value={parsedValue}
+                />
+            </div>
         );
     }
 );
@@ -102,3 +79,4 @@ const DebouncedPicker = ({ color, onChange }: { color: string; onChange: (val: s
 CustomColorPicker.displayName = "CustomColorPicker";
 
 export { CustomColorPicker };
+

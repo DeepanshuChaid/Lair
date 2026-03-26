@@ -506,7 +506,9 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                 undo={undo}
                 redo={redo}
                 canUndo={canUndo}
-                canRedo={canRedo} 
+                canRedo={canRedo}
+                lastUsedColor={lastUsedColor} // Pass this
+                onChangeColor={onChangeColor} // Pass this
             />
 
             <svg

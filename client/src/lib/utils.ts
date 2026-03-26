@@ -33,15 +33,24 @@ export function ColorToCss(color: color) {
 }
 
 export function cssToColor(css_color: string) {
-  if (!css_color.startsWith("#") || css_color.length !== 7) {
-      return { r: 255, g: 255, b: 255 };
-  }
+    // Safety check: if it's null, undefined, or not a string
+    if (!css_color || typeof css_color !== "string" || !css_color.startsWith("#")) {
+        return { r: 255, g: 255, b: 255 };
+    }
 
-  const hex_color = css_color.slice(1);
+    // Handle #RGB and #RRGGBB
+    let hex = css_color.replace("#", "");
+    if (hex.length === 3) {
+        hex = hex.split("").map((char) => char + char).join("");
+    }
 
-  const r = parseInt(hex_color.substring(0, 2), 16);
-  const g = parseInt(hex_color.substring(2, 4), 16);
-  const b = parseInt(hex_color.substring(4), 16);
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
 
-  return { r, g, b };
+    return { 
+        r: isNaN(r) ? 255 : r, 
+        g: isNaN(g) ? 255 : g, 
+        b: isNaN(b) ? 255 : b 
+    };
 }

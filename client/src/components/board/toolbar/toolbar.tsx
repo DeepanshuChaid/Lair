@@ -12,25 +12,30 @@ import {
     Square 
 } from "lucide-react";
 
-import { CanvasMode, CanvasState } from "@/types/canvas";
+import { ColorPicker } from "../color-picker"; // Adjust path as needed
+import { color, CanvasState, CanvasMode } from "@/types/canvas";
 import { ToolButton } from "../tool-button/tool-button";
 
 interface ToolbarProps {
     canvasState: CanvasState;
-    setCanvasState: (newState: CanvasState) => void;
+    setCanvasState: (state: CanvasState) => void;
     undo: () => void;
     redo: () => void;
     canUndo: boolean;
     canRedo: boolean;
-}
+    lastUsedColor: color;
+    onChangeColor: (color: color) => void;
+};
 
-export default function Toolbar({
+export default function Toolbar ({
     canvasState,
     setCanvasState,
     undo,
     redo,
     canUndo,
     canRedo,
+    lastUsedColor,
+    onChangeColor,
 }: ToolbarProps) {
     return (
         <div className="absolute top-[50%] -translate-y-[50%] left-2 flex flex-col gap-y-4">
@@ -90,6 +95,15 @@ export default function Toolbar({
                     onClick={() => setCanvasState({ mode: CanvasMode.Pencil })}
                 />
             </div>
+
+            {/* COLOR PICKER */}
+            <div className="flex flex-col items-center gap-y-4 border-t border-neutral-200 pt-4">
+                <ColorPicker 
+                    lastUsedColor={lastUsedColor} 
+                    onChange={onChangeColor} 
+                />
+            </div>
+
             <div className="bg-white rounded-md p-1.5 flex gap-y-1 flex-col items-center shadow-md">
                 <ToolButton 
                     label="Undo"
