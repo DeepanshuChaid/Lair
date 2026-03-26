@@ -18,6 +18,7 @@ import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
 import { cssToColor } from "@/lib/utils";
 import { Note } from "../boardTools/note";
+import { Text } from "../boardTools/text";
 
 const MAX_LAYERS = 500;
 
@@ -569,23 +570,40 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                                 />
                             );
                         } else if (layer.type === layerType.Note) {
+                            return (
+                                <Note
+                                    key={layerId}
+                                    id={layerId}
+                                    layer={layer as any}
+                                    onPointerDown={onLayerPointerDown}
+                                    selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
+                                    onValueChange={(newValue) => {
+                                        const nextLayers = rectangleLayers.map((l) => 
+                                            l.id === layerId ? { ...l, layer: { ...l.layer, value: newValue } } : l
+                                        );
+                                        setRectangleLayers(nextLayers);
+                                        saveState(JSON.stringify(nextLayers));
+                                    }}
+                                />
+                            ) 
+                        } else if (layer.type === layerType.Text) {
                         return (
-                            <Note
-                                key={layerId}
-                                id={layerId}
-                                layer={layer as any}
-                                onPointerDown={onLayerPointerDown}
-                                selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
-                                onValueChange={(newValue) => {
-                                    const nextLayers = rectangleLayers.map((l) => 
-                                        l.id === layerId ? { ...l, layer: { ...l.layer, value: newValue } } : l
-                                    );
-                                    setRectangleLayers(nextLayers);
-                                    saveState(JSON.stringify(nextLayers));
-                                }}
-                            />
-                        );
-                    }
+                                <Text
+                                    key={layerId}
+                                    id={layerId}
+                                    layer={layer as any}
+                                    onPointerDown={onLayerPointerDown}
+                                    selectionColor={selection.includes(layerId) ? strokeColor : "transparent"}
+                                    onValueChange={(newValue) => {
+                                        const nextLayers = rectangleLayers.map((l) => 
+                                            l.id === layerId ? { ...l, layer: { ...l.layer, value: newValue } } : l
+                                        );
+                                        setRectangleLayers(nextLayers);
+                                        saveState(JSON.stringify(nextLayers)); // Saves to Undo/Redo history
+                                    }}
+                                />
+                            );
+                        }
                         return null;
                     })}
 
