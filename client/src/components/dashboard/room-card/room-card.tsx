@@ -31,6 +31,13 @@ import { toast } from "@/hooks/use-toast"
 import { EditRoomDialog } from "../edit-room-dialog/edit-room-dialog"
 import UploadThumbnail from "../upload-thumbnail/upload-thumbnail"
 import Link from "next/link"
+import { ManageMembers } from "../manage-members/manage-members"
+
+const MOCK_MEMBERS = [
+  { id: "1", name: "Alice Johnson", email: "alice@example.com", image: "" },
+  { id: "2", name: "Bob Smith", email: "bob@example.com", image: "" },
+  { id: "3", name: "Charlie Day", email: "charlie@@sunny.com", image: "" },
+];
 
 // --- 1. Define the Schema ---
 const inviteSchema = z.object({
@@ -92,6 +99,31 @@ export const RoomCard = ({ room }: { room: Room }) => {
       toast({ 
         title: "Error", 
         description: err?.response?.data?.message || "Failed to add member", 
+        variant: "destructive" 
+      })
+    },
+    
+  })
+
+  const removeMemberMutation = useMutation({
+    mutationFn: async (data: InviteFormValues) => {
+        const res = await API.delete(`/api/ws/remove-member/${room.id}`, data)
+        return res.data
+    },
+    onSuccess: (_, variables) => {
+      toast({ 
+        title: "Removed!", 
+        description: `${variables.email} Removed from the Room`, 
+        variant: "success" 
+      })
+      queryClient.invalidateQueries({ queryKey: [`members:${room.id}`] });
+      setMemberDialogOpen(false)
+      reset() // Reset form after success
+    },
+    onError: (err: any) => {
+      toast({ 
+        title: "Error", 
+        description: err?.response?.data?.message || "Failed to remove the member", 
         variant: "destructive" 
       })
     }
@@ -169,14 +201,13 @@ export const RoomCard = ({ room }: { room: Room }) => {
                 <DropdownMenuContent align="end" className="w-[180px]">
 
                   <DropdownMenuItem 
-                    className="gap-2 cursor-pointer" 
                     onClick={(e) => {
-                      e.stopPropagation()
-                      setMemberDialogOpen(true)
+                      e.stopPropagation();
+                      setMemberDialogOpen(true);
                     }}
                   >
                     <UserPlus className="h-4 w-4" />
-                    Add Member
+                    Manage Members
                   </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
@@ -239,61 +270,15 @@ export const RoomCard = ({ room }: { room: Room }) => {
     />
 
       {/* --- ADD MEMBER DIALOG --- */}
-      <Dialog 
-        open={memberDialogOpen} 
-        onOpenChange={(open) => {
-          setMemberDialogOpen(open)
-          if (!open) reset() // Clear errors and input when closing
-        }}
-      >
-        <DialogContent className="sm:max-w-[425px]" onClick={(e) => e.stopPropagation()}>
-          <DialogHeader>
-            <DialogTitle>Add Member</DialogTitle>
-            <DialogDescription>
-              Invite someone to <span className="font-semibold text-[#171717]">"{room.title}"</span> by their email address.
-            </DialogDescription>
-          </DialogHeader>
+      <ManageMembers
+        open={memberDialogOpen}
+        onOpenChange={setMemberDialogOpen}
+        roomId={room.id}
+        roomTitle={room.title}
+      />
 
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className={errors.email ? "text-red-500" : ""}>Email Address</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="colleague@example.com"
-                {...register("email")}
-                className={errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}
-                autoFocus
-              />
-              {errors.email && (
-                <p className="text-red-500 text-xs font-medium">{errors.email.message}</p>
-              )}
-            </div>
-            
-            <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setMemberDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={addMemberMutation.isPending}
-                className="bg-[#171717] hover:bg-[#262626] min-w-[100px]"
-              >
-                {addMemberMutation.isPending ? (
-                  <Loader className="animate-spin h-4 w-4" />
-                ) : (
-                  "Send Invite"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      
     </>
   )
 }

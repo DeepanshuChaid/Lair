@@ -345,12 +345,6 @@ func GetRoomMembers() gin.HandlerFunc {
 		}
 
 		var room struct {
-			ID           string          `json:"id"`
-			OwnerID      string          `json:"owner_id"`
-			Title        string          `json:"title"`
-			Version      int             `json:"version"`
-			CreatedAt    time.Time       `json:"created_at"`
-			UpdatedAt    time.Time       `json:"updated_at"`
 			State        json.RawMessage `json:"state"`
 			Members      json.RawMessage `json:"members"` // Scan the whole JSON array here
 		}
@@ -369,7 +363,6 @@ func GetRoomMembers() gin.HandlerFunc {
 		// We use COALESCE to handle rooms that might not have members yet
 		query := `
             SELECT 
-                r.id, r.owner_id, r.title, r.version, r.created_at, r.updated_at,
                 COALESCE(rs.state, '{}'::jsonb),
                 COALESCE(json_agg(json_build_object(
                     'id', u.id,
@@ -386,8 +379,7 @@ func GetRoomMembers() gin.HandlerFunc {
             GROUP BY r.id, rs.state;`
 
 		err = database.Pool.QueryRow(ctx, query, roomId).Scan(
-			&room.ID, &room.OwnerID, &room.Title, &room.Version,
-			&room.CreatedAt, &room.UpdatedAt, &room.State, &room.Members,
+			 &room.State, &room.Members,
 		)
 
 		if err != nil {
@@ -400,9 +392,6 @@ func GetRoomMembers() gin.HandlerFunc {
 		if err == nil {
 			cache.Set(ctx, "members:"+roomId, stringifiedData, 5*time.Hour)
 		}
-
-		// Return the 'room' object directly so it matches the cached structure
-		c.JSON(http.StatusOK, room)
 
 		c.JSON(http.StatusOK, gin.H{
 			"room":    room,
