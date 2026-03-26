@@ -54,4 +54,7 @@ export const Note = ({ id, layer, onPointerDown, selectionColor, onValueChange }
             />
         </foreignObject>
     );
-};
+}; 
+
+// this is mine but i found something that looks better?
+

@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { Rectangle as RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
-import { cssToColor } from "@/lib/utils";
+import { cssToColor,ColorToCss } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { uuidv4 } from "zod";
@@ -243,49 +243,50 @@ export default function Canvas({id, title}: {id: string, title: string}) {
             setCanvasState({ mode: CanvasMode.SelectionNet, origin: coords });
             return;
         }
+
+        if (canvasState.mode === CanvasMode.Pencil) {
+            setCanvasState({
+                mode: CanvasMode.Pencil,
+                // Start the path with the first point [x, y, pressure]
+                pencilPoints: [[coords.x, coords.y, e.pressure || 0.5]],
+            });
+            return;
+        }
     }, [canvasState, clientToWorld]);
 
-    const onSvgPointerMove = useCallback(
-        (e: React.PointerEvent<SVGSVGElement>) => {
-            if (!insertingStartRef.current) return;
-            if (canvasState.mode !== CanvasMode.Inserting) return;
-    
-            const start = insertingStartRef.current;
-            const end = clientToWorld(e.clientX, e.clientY);
-    
-            const x = Math.min(start.x, end.x);
-            const y = Math.min(start.y, end.y);
-            const width = Math.abs(end.x - start.x);
-            const height = Math.abs(end.y - start.y);
+    const onSvgPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+        const coords = clientToWorld(e.clientX, e.clientY);
 
-            if (canvasState.mode === CanvasMode.Pencil) {
-                const { pencilPoints } = canvasState;
-                
-                setCanvasState({
-                    mode: CanvasMode.Pencil,
-                    pencilPoints: pencilPoints 
-                        ? [...pencilPoints, [point.x, point.y, e.pressure]] 
-                        : [[point.x, point.y, e.pressure]],
-                });
-            }
-    
-            // Use the current layerType from state (Rectangle, Ellipse, etc.)
+        // 1. Pencil Drawing Logic
+        if (canvasState.mode === CanvasMode.Pencil) {
+            setCanvasState((prev) => {
+                if (prev.mode !== CanvasMode.Pencil || !prev.pencilPoints) return prev;
+                return {
+                    ...prev,
+                    pencilPoints: [...prev.pencilPoints, [coords.x, coords.y, e.pressure || 0.5]],
+                };
+            });
+            return;
+        }
+
+        // 2. Shape Insertion Logic
+        if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
+            const start = insertingStartRef.current;
+            const x = Math.min(start.x, coords.x);
+            const y = Math.min(start.y, coords.y);
+            const width = Math.abs(coords.x - start.x);
+            const height = Math.abs(coords.y - start.y);
+
             setDraftRectangleLayer({
                 id: "draft",
                 layer: {
-                    type: canvasState.layerType, // Use active tool type
-                    x,
-                    y,
-                    width,
-                    height,
+                    type: canvasState.layerType,
+                    x, y, width, height,
                     fill: lastUsedColor,
                 } as any,
             });
-    
-            e.preventDefault();
-        },
-        [canvasState, clientToWorld, lastUsedColor]
-    );
+        }
+    }, [canvasState, clientToWorld, lastUsedColor]);
 
     const onSvgPointerUp = useCallback(
         (e: React.PointerEvent<SVGSVGElement>) => {
@@ -326,25 +327,38 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                 setRectangleLayers(nextLayers); // Ensure local state updates too
             }
 
-            if (canvasState.mode === CanvasMode.Pencil) {
-                const id = uuidv4(); // or however you generate IDs
-                const newLayer = {
-                    type: LayerType.Path,
-                    x: 0, // Paths usually use absolute coordinates inside the points array
-                    y: 0,
-                    width: 0, // Not needed for paths
-                    height: 0,
-                    fill: lastUsedColor,
-                    points: canvasState.pencilPoints,
+            if (canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints) {
+                const newId = `layer-${rectIdCounterRef.current++}`;
+                
+                // Create the permanent Path layer
+                const newPathLayer = {
+                    id: newId,
+                    layer: {
+                        type: layerType.Path, // Ensure your layerType enum includes Path
+                        x: 0, 
+                        y: 0,
+                        width: 0, // Paths usually don't need fixed w/h for rendering
+                        height: 0,
+                        fill: lastUsedColor,
+                        points: canvasState.pencilPoints,
+                    }
                 };
 
-                const nextLayers = [...rectangleLayers, { id, layer: newLayer }];
+                const nextLayers = [...rectangleLayers, newPathLayer];
+                
                 setRectangleLayers(nextLayers);
                 saveState(JSON.stringify(nextLayers));
-                
-                // Reset the pencil state
+
+                // Reset state but keep Pencil mode active so you can draw again immediately
                 setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: null });
+                return;
             }
+
+            // Existing Rectangle/Insertion logic
+            if (!insertingStartRef.current || canvasState.mode !== CanvasMode.Inserting) {
+                setCanvasState({ mode: CanvasMode.None }); // Only reset if not in Pencil/Inserting
+                return;
+            };
     
             insertingStartRef.current = null;
             setDraftRectangleLayer(null);

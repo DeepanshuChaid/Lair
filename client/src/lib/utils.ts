@@ -69,5 +69,5 @@ export function getSvgPathFromStroke(stroke: number[][]) {
     ""
   );
 
-  return d;
+  return `${d} Z`; // The "Z" closes the path for the freehand look
 }
