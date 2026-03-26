@@ -247,7 +247,7 @@ export default function Canvas({id, title}: {id: string, title: string}) {
         if (canvasState.mode === CanvasMode.Pencil) {
             setCanvasState({
                 mode: CanvasMode.Pencil,
-                // Start the path with the first point [x, y, pressure]
+                // Ensure we start a fresh array
                 pencilPoints: [[coords.x, coords.y, e.pressure || 0.5]],
             });
             return;
@@ -290,83 +290,52 @@ export default function Canvas({id, title}: {id: string, title: string}) {
 
     const onSvgPointerUp = useCallback(
         (e: React.PointerEvent<SVGSVGElement>) => {
-            if (!insertingStartRef.current || canvasState.mode !== CanvasMode.Inserting) return;
-    
-            const start = insertingStartRef.current;
-            const end = clientToWorld(e.clientX, e.clientY);
-    
-            const x = Math.min(start.x, end.x);
-            const y = Math.min(start.y, end.y);
-            const width = Math.abs(end.x - start.x);
-            const height = Math.abs(end.y - start.y);
-    
-            if (width >= 1 && height >= 1) {
-                const newId = `layer-${rectIdCounterRef.current++}`;
-                
-                // Clean and type-safe!
-                const type = canvasState.layerType;
-    
-                const nextLayers = [
-                    ...rectangleLayers,
-                    {
-                        id: newId,
-                        layer: {
-                            type, // TypeScript now knows this is a valid layerType
-                            x,
-                            y,
-                            width,
-                            height,
-                            fill: lastUsedColor,
-                        } as any, // Use your Layer union type here
-                    },
-                ];
+            const { mode } = canvasState;
 
-                
-    
-                saveState(JSON.stringify(nextLayers));
-                setRectangleLayers(nextLayers); // Ensure local state updates too
+            // --- EXISTING SHAPE INSERTION LOGIC ---
+            if (mode === CanvasMode.Inserting && insertingStartRef.current) {
+                // ... (keep your existing rectangle/ellipse logic here)
+                // ...
+                return;
             }
 
-            if (canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints) {
+            // --- NEW PENCIL SAVING LOGIC ---
+            if (mode === CanvasMode.Pencil && canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
                 const newId = `layer-${rectIdCounterRef.current++}`;
                 
-                // Create the permanent Path layer
-                const newPathLayer = {
+                // Create the new Path layer
+                const newLayer = {
                     id: newId,
                     layer: {
-                        type: layerType.Path, // Ensure your layerType enum includes Path
+                        type: layerType.Path,
+                        // Use a helper to find the top-left of the drawn points
                         x: 0, 
                         y: 0,
-                        width: 0, // Paths usually don't need fixed w/h for rendering
+                        width: 0, // Paths often use internal point logic for width
                         height: 0,
                         fill: lastUsedColor,
                         points: canvasState.pencilPoints,
-                    }
+                    } as any,
                 };
 
-                const nextLayers = [...rectangleLayers, newPathLayer];
-                
+                const nextLayers = [...rectangleLayers, newLayer];
+
+                // Save to state and history
                 setRectangleLayers(nextLayers);
                 saveState(JSON.stringify(nextLayers));
 
-                // Reset state but keep Pencil mode active so you can draw again immediately
-                setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: null });
+                // Reset pencil state but keep the mode if you want to continue drawing
+                setCanvasState({ 
+                    mode: CanvasMode.Pencil, 
+                    pencilPoints: [] 
+                });
                 return;
             }
 
-            // Existing Rectangle/Insertion logic
-            if (!insertingStartRef.current || canvasState.mode !== CanvasMode.Inserting) {
-                setCanvasState({ mode: CanvasMode.None }); // Only reset if not in Pencil/Inserting
-                return;
-            };
-    
-            insertingStartRef.current = null;
-            setDraftRectangleLayer(null);
             setCanvasState({ mode: CanvasMode.None });
         },
-        [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState]
+        [canvasState, rectangleLayers, lastUsedColor, saveState, clientToWorld]
     );
-
 
     const [selection, setSelection] = useState<string[]>([]); // Array of selected layer IDs
 
@@ -652,7 +621,7 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                                     }}
                                 />
                             );
-                        } else if (layer.type === LayerType.Path) {
+                        } else if (layer.type === layerType.Path) {
                             return (
                                 <Path
                                     key={layerId}
