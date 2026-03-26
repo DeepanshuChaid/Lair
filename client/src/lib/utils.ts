@@ -57,3 +57,17 @@ export function cssToColor(css_color: string) {
         b: isNaN(b) ? 255 : b 
     };
 }
+
+export function getSvgPathFromStroke(stroke: number[][]) {
+  if (!stroke.length) return "";
+
+  const d = stroke.reduce(
+    (acc, [x, y], i) => {
+      if (i === 0) return `M ${x} ${y}`;
+      return `${acc} L ${x} ${y}`;
+    },
+    ""
+  );
+
+  return d;
+}

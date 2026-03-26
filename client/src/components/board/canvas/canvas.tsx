@@ -19,6 +19,8 @@ import { Ellipse } from "../boardTools/ellipse";
 import { cssToColor } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
+import { uuidv4 } from "zod";
+import { Path } from "../boardTools/path";
 
 const MAX_LAYERS = 500;
 
@@ -255,6 +257,17 @@ export default function Canvas({id, title}: {id: string, title: string}) {
             const y = Math.min(start.y, end.y);
             const width = Math.abs(end.x - start.x);
             const height = Math.abs(end.y - start.y);
+
+            if (canvasState.mode === CanvasMode.Pencil) {
+                const { pencilPoints } = canvasState;
+                
+                setCanvasState({
+                    mode: CanvasMode.Pencil,
+                    pencilPoints: pencilPoints 
+                        ? [...pencilPoints, [point.x, point.y, e.pressure]] 
+                        : [[point.x, point.y, e.pressure]],
+                });
+            }
     
             // Use the current layerType from state (Rectangle, Ellipse, etc.)
             setDraftRectangleLayer({
@@ -306,9 +319,31 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                         } as any, // Use your Layer union type here
                     },
                 ];
+
+                
     
                 saveState(JSON.stringify(nextLayers));
                 setRectangleLayers(nextLayers); // Ensure local state updates too
+            }
+
+            if (canvasState.mode === CanvasMode.Pencil) {
+                const id = uuidv4(); // or however you generate IDs
+                const newLayer = {
+                    type: LayerType.Path,
+                    x: 0, // Paths usually use absolute coordinates inside the points array
+                    y: 0,
+                    width: 0, // Not needed for paths
+                    height: 0,
+                    fill: lastUsedColor,
+                    points: canvasState.pencilPoints,
+                };
+
+                const nextLayers = [...rectangleLayers, { id, layer: newLayer }];
+                setRectangleLayers(nextLayers);
+                saveState(JSON.stringify(nextLayers));
+                
+                // Reset the pencil state
+                setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: null });
             }
     
             insertingStartRef.current = null;
@@ -603,9 +638,30 @@ export default function Canvas({id, title}: {id: string, title: string}) {
                                     }}
                                 />
                             );
+                        } else if (layer.type === LayerType.Path) {
+                            return (
+                                <Path
+                                    key={layerId}
+                                    points={layer.points}
+                                    onPointerDown={(e) => onLayerPointerDown(e, layerId)}
+                                    x={layer.x}
+                                    y={layer.y}
+                                    fill={layer.fill ? ColorToCss(layer.fill) : "#000"}
+                                    stroke={selection.includes(layerId) ? strokeColor : "transparent"}
+                                />
+                            );
                         }
                         return null;
                     })}
+
+                    {canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints && (
+                        <Path
+                            points={canvasState.pencilPoints} 
+                            fill={ColorToCss(lastUsedColor)} 
+                            x={0} 
+                            y={0} 
+                        />
+                    )}
 
                     <SelectionBox
                         bounds={selectionBounds} 

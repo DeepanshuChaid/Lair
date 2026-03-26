@@ -31,7 +31,10 @@ export type CanvasState =
         corner: Side;
     }
     |
-    {mode: CanvasMode.Pencil}
+    {
+        mode: CanvasMode.Pencil;
+        pencilPoints?: number[][]; // Add this!
+    }
 
 ;
 
