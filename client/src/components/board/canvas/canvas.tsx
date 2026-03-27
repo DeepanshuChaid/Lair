@@ -145,6 +145,8 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
 
     // --- POINTER EVENTS ---
     const onSvgPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+        e.currentTarget.setPointerCapture(e.pointerId); 
+    
         const coords = clientToWorld(e.clientX, e.clientY);
         if (canvasState.mode === CanvasMode.Inserting) {
             insertingStartRef.current = coords;
@@ -162,7 +164,8 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     const onSvgPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         const coords = clientToWorld(e.clientX, e.clientY);
 
-        if (canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints) {
+        // FIX: Only update pencil points if we are in Pencil mode AND currently drawing (pencilPoints has data)
+        if (canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints && canvasState.pencilPoints.length > 0) {
             setCanvasState((prev) => ({
                 ...prev,
                 mode: CanvasMode.Pencil,
@@ -184,6 +187,8 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
         }
     }, [canvasState, clientToWorld, lastUsedColor]);
 
+    
+    // --- 1. The SVG Specific Handler ---
     const onSvgPointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         const coords = clientToWorld(e.clientX, e.clientY);
 
@@ -206,12 +211,17 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
                 setRectangleLayers(nextLayers);
                 saveState(JSON.stringify(nextLayers));
             }
-            setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
-            return;
+            
+            // Clear the temporary points but KEEP the Pencil mode active 
+            // so the user can draw multiple strokes without re-selecting the tool
+            setCanvasState({ 
+                mode: CanvasMode.Pencil, 
+                pencilPoints: [] 
+            });
         }
 
         // --- SHAPE FINALIZATION ---
-        if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
+        else if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
             const start = insertingStartRef.current;
             let width = Math.abs(coords.x - start.x);
             let height = Math.abs(coords.y - start.y);
@@ -232,11 +242,28 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             ];
             setRectangleLayers(nextLayers);
             saveState(JSON.stringify(nextLayers));
+            
             insertingStartRef.current = null;
             setDraftRectangleLayer(null);
             setCanvasState({ mode: CanvasMode.None });
         }
+        
+        // --- TRANSLATING / RESIZING FINALIZATION ---
+        else if (canvasState.mode === CanvasMode.Translating || canvasState.mode === CanvasMode.Resizing) {
+            saveState(JSON.stringify(rectangleLayers));
+            setCanvasState({ mode: CanvasMode.None });
+        }
+
+        // --- SELECTION NET FINALIZATION ---
+        else {
+            setCanvasState({ mode: CanvasMode.None });
+        }
+
+        // Release pointer capture
+        e.currentTarget.releasePointerCapture(e.pointerId);
     }, [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState]);
+
+
 
     const [selection, setSelection] = useState<string[]>([]);
     
@@ -288,14 +315,35 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     }, [canvasState, selection, clientToWorld, user?.name]);
 
     const onPointerUp = useCallback(() => {
-        if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) saveState(JSON.stringify(rectangleLayers));
-        setCanvasState({ mode: CanvasMode.None });
-    }, [canvasState.mode, rectangleLayers, saveState]);
+        // 1. If we were moving or resizing, save the final state to history
+        if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
+            saveState(JSON.stringify(rectangleLayers));
+        }
+
+        // 2. CRITICAL: If we are in Pencil or Inserting mode, STOP HERE.
+        // This prevents the UI from switching back to "Selection" mode 
+        // after every single stroke or shape placement.
+        if (
+            canvasState.mode === CanvasMode.Pencil || 
+            canvasState.mode === CanvasMode.Inserting
+        ) {
+            return; 
+        }
+
+        // 3. For everything else (SelectionNet, etc.), reset to None
+        setCanvasState({ mode: CanvasMode.None });
+    }, [canvasState.mode, rectangleLayers, saveState]);
 
     const onChangeColor = useCallback((fill: color) => {
         setLastUsedColor(fill);
+        
+        // If items are selected, update their color immediately
         if (selection.length > 0) {
-            const nextLayers = rectangleLayers.map((item) => selection.includes(item.id) ? { ...item, layer: { ...item.layer, fill } } : item);
+            const nextLayers = rectangleLayers.map((item) => 
+                selection.includes(item.id) 
+                    ? { ...item, layer: { ...item.layer, fill } } 
+                    : item
+            );
             setRectangleLayers(nextLayers);
             saveState(JSON.stringify(nextLayers));
         }
