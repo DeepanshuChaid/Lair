@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { CanvasMode, CanvasState, color, layerType, Point, RectangleLayer, Side, XYMH } from "@/types/canvas";
+import { CanvasMode, CanvasState, color, layerType, NoteLayer, Point, RectangleLayer, Side, XYMH } from "@/types/canvas";
 import { useHistory } from "@/hooks/use-history";
 import { connectSocket } from "@/lib/api/websocket-api";
 
@@ -44,6 +44,8 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     const insertingStartRef = useRef<Point | null>(null);
     const rectIdCounterRef = useRef(0);
     const didInitHistoryRef = useRef(false);
+
+    const isDirty = useRef(false)
 
     // --- WEBSOCKET SETUP ---
     useEffect(() => {
@@ -95,6 +97,19 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
         return () => { isCancelled = true; wsRef.current?.close(); };
     }, [id]); 
 
+    // handle before unload
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isDirty.current) {
+                const data = JSON.stringify({ layers: rectangleLayers });
+                // sendBeacon is more reliable than axios for 'tab close' events
+                navigator.sendBeacon(`/api/rooms/save/${id}`, data);
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [rectangleLayers, id]);
+
     // --- HISTORY SNAPSHOTS ---
     useEffect(() => {
         if (didInitHistoryRef.current) return;
@@ -123,6 +138,7 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             if (!e.ctrlKey) return;
             if (e.key === "z" || e.key === "Z") { e.preventDefault(); undo(); }
             if (e.key === "y" || e.key === "Y") { e.preventDefault(); redo(); }
+            if (e.key === "s" || e.key === "S") { e.preventDefault(); if (!isPending) mutate(rectangleLayers); }
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
@@ -232,6 +248,8 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
                 ];
                 setRectangleLayers(nextLayers);
                 saveState(JSON.stringify(nextLayers));
+
+                isDirty.current = true
             }
             
             // Clear the temporary points but KEEP the Pencil mode active 
@@ -340,6 +358,7 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
         // 1. If we were moving or resizing, save the final state to history
         if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
             saveState(JSON.stringify(rectangleLayers));
+            isDirty.current = true
         }
 
         // 2. CRITICAL: If we are in Pencil or Inserting mode, STOP HERE.
@@ -350,10 +369,11 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             canvasState.mode === CanvasMode.Inserting
         ) {
             return; 
-        }
+        }
 
         // 3. For everything else (SelectionNet, etc.), reset to None
         setCanvasState({ mode: CanvasMode.None });
+        isDirty.current = true;
     }, [canvasState.mode, rectangleLayers, saveState]);
 
     const onChangeColor = useCallback((fill: color) => {
@@ -373,23 +393,13 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
 
     const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
 
-    const syncToBackend = async (layers: any[]) => {
-        try {
-            await API.post(`/api/rooms/${id}/save`, { 
-                layers: layers 
-            });
-        } catch (err: any) {
-            toast({ title: "Error", description: JSON.stringify(err), variant: "destructive" });
-            console.error("Failed to save board:", err);
-        }
-    };
-
-    const { mutate } = useMutation({
+    const { mutate, isPending } = useMutation({
         mutationFn: async (data: any) => {
             console.log(data)
             const res = await API.put(`/api/rooms/save/${id}`, { 
                     layers: data 
                 });
+            isDirty.current = false;
             return res.data
         },
         onSuccess: () => {
@@ -404,28 +414,27 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
 
 
     useEffect(() => {
-        // 1. Don't save empty boards
-        if (rectangleLayers.length === 0) return;
+        // 1. Only sync if there's actually something to save and it's 'dirty'
+        if (rectangleLayers.length === 0 || !isDirty.current) return;
 
-        // 2. Start a timer
-        const timeoutId = setTimeout(async () => {
-            console.log("Syncing to Go Backend...");
-            mutate(rectangleLayers)
-        }, 30000); 
+        // 2. Set a 3-second debounce timer
+        const timeoutId = setTimeout(() => {
+            console.log("Auto-syncing to Backend...");
+            mutate(rectangleLayers);
+        }, 3000); 
 
-        // 3. THE MAGIC: Cleanup function
-        // Every time rectangleLayers changes, React runs this cleanup 
-        // which KILLS the previous timer before starting a new one.
+        // 3. Cleanup: This kills the previous timer if the user moves something 
+        // before the 3 seconds are up.
         return () => clearTimeout(timeoutId);
-    }, []);
+    }, [rectangleLayers, mutate]);
 
     return (
         <main 
             className="h-full w-full relative bg-neutral-100 touch-none overflow-hidden" 
             onPointerMove={onPointerMove} 
             onPointerUp={onPointerUp}
-        >
-            <Info id={id} title={title} />
+        >   
+            <Info id={id} title={title} onClick={() => mutate(rectangleLayers)} />
             <Members id={id} />
             <Toolbar 
                 canvasState={canvasState} 
@@ -456,6 +465,20 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
                                 onPointerDown={() => {}} 
                                 selectionColor={strokeColor} 
                             />
+                        ) : draftRectangleLayer.layer.type === layerType.Text ? (
+                            <Text 
+                                id={draftRectangleLayer.id} 
+                                layer={draftRectangleLayer.layer} 
+                                onPointerDown={() => {}} 
+                                selectionColor={strokeColor} 
+                            />
+                        ) : draftRectangleLayer.layer.type === layerType.Note ? (
+                            <Note 
+                                id={draftRectangleLayer.id} 
+                                layer={draftRectangleLayer.layer} 
+                                onPointerDown={() => {}} 
+                                selectionColor={strokeColor} 
+                            />
                         ) : (
                             <RectangleTool 
                                 id={draftRectangleLayer.id} 
@@ -463,7 +486,7 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
                                 onPointerDown={() => {}} 
                                 selectionColor={strokeColor} 
                             />
-                        )
+                        ) 
                     )}
 
                     {/* 2. Rendering all established layers */}

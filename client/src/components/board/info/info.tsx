@@ -12,11 +12,11 @@ const poppins = Poppins({
 })
 
 
-export default function Info({id, title}: {id: string, title: string}) {
+export default function Info({id, title, onClick}: {id: string, title: string, onClick: () => void}) {
 
 
     return (
-        <Link href="/">
+        <Link href="/" onClick={onClick}>
             <Hint  label="Back to Home" side="right" align="start" sideOffset={10} alignOffset={10}>
                 <div className="absolute top-2 left-2 bg-white rounded-md p-2 shadow-md h-12 flex items-center">
                     <Button className="px-2" variant="board">
