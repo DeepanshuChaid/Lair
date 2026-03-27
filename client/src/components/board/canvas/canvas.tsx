@@ -19,7 +19,9 @@ import { Ellipse } from "../boardTools/ellipse";
 import { ColorToCss } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
+import debounce from "lodash/debounce";
 import { Path } from "../boardTools/path";
+import API from "@/lib/axios";
 
 const MAX_LAYERS = 500;
 
@@ -350,6 +352,33 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     }, [selection, rectangleLayers, saveState]);
 
     const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
+
+    const syncToBackend = async (layers: any[]) => {
+        try {
+            await API.post(`/api/rooms/${id}/save`, { 
+                layers: layers 
+            });
+        } catch (err) {
+            console.error("Failed to save board:", err);
+        }
+    };
+
+
+    useEffect(() => {
+        // 1. Don't save empty boards
+        if (rectangleLayers.length === 0) return;
+
+        // 2. Start a timer
+        const timeoutId = setTimeout(async () => {
+            console.log("Syncing to Go Backend...");
+            syncToBackend(rectangleLayers)
+        }, 1500); // Wait 1.5 seconds after the last change
+
+        // 3. THE MAGIC: Cleanup function
+        // Every time rectangleLayers changes, React runs this cleanup 
+        // which KILLS the previous timer before starting a new one.
+        return () => clearTimeout(timeoutId);
+    }, [rectangleLayers]);
 
     return (
         <main 
