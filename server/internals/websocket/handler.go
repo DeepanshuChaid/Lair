@@ -302,12 +302,6 @@ func SaveData() gin.HandlerFunc {
 			roomId,
 		)
 
-		// Optional: Check if the room actually exists
-        // if result.RowsAffected() == 0 {
-        //     c.JSON(http.StatusNotFound, gin.H{"message": "Room state not found"})
-        //     return
-        // }
-
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error!", "details": err.Error()})
 			return
@@ -318,72 +312,46 @@ func SaveData() gin.HandlerFunc {
 }
 
 func ServerWs(hub *Hub) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userId := c.GetString("userId")
-		if userId == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
-			return
-		}
-
-		// roomId := c.Param("roomId")
-		// if roomId == "" {
-		// 	c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
-		// 	return
-		// }
-
-		ticket := c.Query("ticket")
-		if ticket == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Ticket is required"})
-			return
-		}
-
-		val, err := cache.Get(c.Request.Context(), ticket)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid ticket"})
-			return
-		}
-
-		if val != userId {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid ticket"})
-			return
-		}
+    return func(c *gin.Context) {
+        roomId := c.Param("roomId") 
+        userId := c.GetString("userId")
+        ticket := c.Query("ticket")
 
 
-		// Upgrade connection means convert the http protocol into websocket connection
-		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to upgrade to WebSocket", "error": err.Error(),})
-			return
-		}
+        val, err := cache.Get(c.Request.Context(), ticket)
+        if err != nil || val != userId {
+            c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid ticket"})
+            return
+        }
 
-		// Get or create room
-		room, err := hub.GetRoom(val)
-		if err != nil {
-			room = NewRoom(val, "naam me kya rakha hai", userId)
-			hub.RegisterRoom <- room
-			go room.Run()
-		}
+        conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+        if err != nil { return }
 
-		// Create client and register
-		client := NewClient(conn, userId, val, hub)
-		room.Register <- client
 
-		var rawState json.RawMessage
-		err = database.Pool.QueryRow(c.Request.Context(),
-			"SELECT state FROM room_state WHERE room_id = $1", val).Scan(&rawState)
-		
-		if err == nil && len(rawState) > 0 {
-			// Send current board state as the first message
-			client.Send <- &Message{
-				Type:    "init_state",
-				Content: rawState,
-				SentAt:  time.Now().UnixMilli(),
-			}
-		}
+        room, err := hub.GetRoom(roomId)
+        if err != nil {
+            room = NewRoom(roomId, "Room Name", userId)
+            hub.RegisterRoom <- room
+            go room.Run()
+        }
 
-		// Start pumps
-		go client.WritePump()
-		go client.ReadPump(room)
-	}
+        client := NewClient(conn, userId, roomId, hub)
+        room.Register <- client
+
+        var rawState json.RawMessage
+        err = database.Pool.QueryRow(c.Request.Context(),
+            "SELECT state FROM room_state WHERE room_id = $1", roomId).Scan(&rawState)
+        
+        if err == nil && len(rawState) > 0 {
+            client.Send <- &Message{
+                Type:    "init_state",
+                Content: rawState,
+                SentAt:  time.Now().UnixMilli(),
+            }
+        }
+
+        go client.WritePump()
+        go client.ReadPump(room)
+    }
 }
 

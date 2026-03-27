@@ -1,144 +1,144 @@
-"use client";
+// "use client";
 
-import { useEffect, useRef, useState } from "react";
+// import { useEffect, useRef, useState } from "react";
 
-type Message = {
-  roomId: string;
-  type: string;
-  userId: string;
-  content: any;
-  version: number;
-  sentAt: number;
-};
+// type Message = {
+//   roomId: string;
+//   type: string;
+//   userId: string;
+//   content: any;
+//   version: number;
+//   sentAt: number;
+// };
 
-import { connectSocket } from "@/lib/api/websocket-api";
-import API from "@/lib/axios";
-import { toast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+// import { connectSocket } from "@/lib/api/websocket-api";
+// import API from "@/lib/axios";
+// import { toast } from "@/hooks/use-toast";
+// import { useMutation } from "@tanstack/react-query";
 
-export default function TestWS() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const wsRef = useRef<WebSocket | null>(null);
+// export default function TestWS() {
+//   const [messages, setMessages] = useState<Message[]>([]);
+//   const [input, setInput] = useState("");
+//   const wsRef = useRef<WebSocket | null>(null);
 
-  const [userData, setUserData] = useState({})
+//   const [userData, setUserData] = useState({})
 
-  useEffect(() => {
-    let isCancelled = false; // Flag to prevent double-init
-    let wsInstance: WebSocket | null = null;
+//   useEffect(() => {
+//     let isCancelled = false; // Flag to prevent double-init
+//     let wsInstance: WebSocket | null = null;
 
-    const setup = async () => {
-      try {
-        const { socket } = await connectSocket("294f0cde-d3db-49d2-93cd-82dd30afb326");
+//     const setup = async () => {
+//       try {
+//         const { socket } = await connectSocket("294f0cde-d3db-49d2-93cd-82dd30afb326");
         
-        // If the component unmounted before the ticket came back, kill this socket!
-        if (isCancelled) {
-          socket.close();
-          return;
-        }
+//         // If the component unmounted before the ticket came back, kill this socket!
+//         if (isCancelled) {
+//           socket.close();
+//           return;
+//         }
 
-        wsInstance = socket;
-        wsRef.current = socket;
+//         wsInstance = socket;
+//         wsRef.current = socket;
 
-        socket.onopen = () => console.log("✅ Connected");
+//         socket.onopen = () => console.log("✅ Connected");
         
-        socket.onmessage = (event) => {
-          if (isCancelled) return; // Ignore if we are dead
-          const data = JSON.parse(event.data);
-          setMessages((prev) => [...prev, data]);
-        };
+//         socket.onmessage = (event) => {
+//           if (isCancelled) return; // Ignore if we are dead
+//           const data = JSON.parse(event.data);
+//           setMessages((prev) => [...prev, data]);
+//         };
 
-        // ... rest of your listeners
-      } catch (err: any) {
-        if (!isCancelled) {
-          toast({ title: "Error", description: err.response?.data?.message, variant: "destructive" });
-        }
-      }
-    };
+//         // ... rest of your listeners
+//       } catch (err: any) {
+//         if (!isCancelled) {
+//           toast({ title: "Error", description: err.response?.data?.message, variant: "destructive" });
+//         }
+//       }
+//     };
 
-    setup();
+//     setup();
 
-    return () => {
-      isCancelled = true; // Mark as dead
-      wsInstance?.close();
-      wsRef.current = null;
-    };
-  }, []);
+//     return () => {
+//       isCancelled = true; // Mark as dead
+//       wsInstance?.close();
+//       wsRef.current = null;
+//     };
+//   }, []);
 
 
-  const sendMessage = () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+//   const sendMessage = () => {
+//     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
-    const msg = {
-      type: "chat",
-      content: {
-        text: input,
-      },
-      version: 1,
-    };
+//     const msg = {
+//       type: "chat",
+//       content: {
+//         text: input,
+//       },
+//       version: 1,
+//     };
 
-    wsRef.current.send(JSON.stringify(msg));
-    setInput("");
-  };
+//     wsRef.current.send(JSON.stringify(msg));
+//     setInput("");
+//   };
 
-  const {mutate} = useMutation({
-    mutationFn: async () => {
-      const res = await API.get("/api/user")
-      setUserData(res.data)
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "User data fetched successfully",
-        variant: "success"
-      })
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: "Failed to fetch user data" + error,
-        variant: "destructive"
-      })
-    }
-  })
+//   const {mutate} = useMutation({
+//     mutationFn: async () => {
+//       const res = await API.get("/api/user")
+//       setUserData(res.data)
+//     },
+//     onSuccess: () => {
+//       toast({
+//         title: "Success",
+//         description: "User data fetched successfully",
+//         variant: "success"
+//       })
+//     },
+//     onError: (error: any) => {
+//       toast({
+//         title: "Error",
+//         description: "Failed to fetch user data" + error,
+//         variant: "destructive"
+//       })
+//     }
+//   })
 
-  return (
-    <>
-      <div className="p-4">
-        <p>{JSON.stringify(userData)}</p>
+//   return (
+//     <>
+//       <div className="p-4">
+//         <p>{JSON.stringify(userData)}</p>
         
-        <button onClick={() => mutate()} className="p-1 m-1 bg-blue-500 text-white rounded-md">GET USER DATA</button>
-      </div>
-      <div style={{ padding: 20 }}>
-        <h1>WebSocket Test</h1>
+//         <button onClick={() => mutate()} className="p-1 m-1 bg-blue-500 text-white rounded-md">GET USER DATA</button>
+//       </div>
+//       <div style={{ padding: 20 }}>
+//         <h1>WebSocket Test</h1>
 
-        <div
-          style={{
-            border: "1px solid #ccc",
-            height: 300,
-            overflowY: "auto",
-            marginBottom: 10,
-            padding: 10,
-          }}
-        >
-          {messages.map((msg, i) => (
-            <div key={i}>
-              <b>{msg.userId}</b>:{" "}
-              {JSON.stringify(msg.content)}
-            </div>
-          ))}
-        </div>
+//         <div
+//           style={{
+//             border: "1px solid #ccc",
+//             height: 300,
+//             overflowY: "auto",
+//             marginBottom: 10,
+//             padding: 10,
+//           }}
+//         >
+//           {messages.map((msg, i) => (
+//             <div key={i}>
+//               <b>{msg.userId}</b>:{" "}
+//               {JSON.stringify(msg.content)}
+//             </div>
+//           ))}
+//         </div>
 
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type message..."
-        />
+//         <input
+//           value={input}
+//           onChange={(e) => setInput(e.target.value)}
+//           placeholder="Type message..."
+//         />
 
-        <button onClick={sendMessage} style={{ marginLeft: 10 }}>
-          Send
-        </button>
-      </div>
-    </>
-  );
-}
+//         <button onClick={sendMessage} style={{ marginLeft: 10 }}>
+//           Send
+//         </button>
+//       </div>
+//     </>
+//   );
+// }

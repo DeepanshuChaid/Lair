@@ -59,8 +59,27 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
                 if (isCancelled) { socket.close(); return; }
                 wsRef.current = socket;
 
-                socket.onmessage = (event: any) => {
+                socket.onmessage = (event: MessageEvent) => {
                     const data = JSON.parse(event.data);
+
+                    // 1. Handle Initial State from Backend
+                    if (data.type === "init_state") {
+                        const layers = data.content; // This is the json.RawMessage from Go
+                        if (Array.isArray(layers)) {
+                            setRectangleLayers(layers);
+                            // Sync history so the user doesn't "undo" into an empty screen
+                            saveState(JSON.stringify(layers));
+                            
+                            // Update our counter so new IDs don't collide
+                            const maxId = layers.reduce((max, l) => {
+                                const num = parseInt(l.id.replace(/^\D+/g, ''));
+                                return isNaN(num) ? max : Math.max(max, num);
+                            }, 0);
+                            rectIdCounterRef.current = maxId + 1;
+                        }
+                    }
+
+                    // 2. Handle Real-time Cursors
                     if (data.type === "CURSOR_MOVE") {
                         setOtherCursors((prev) => ({
                             ...prev,
@@ -68,11 +87,13 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
                         }));
                     }
                 };
-            } catch (err) { console.error(err); }
+            } catch (err) { 
+                console.error("Socket setup failed:", err); 
+            }
         };
         setup();
         return () => { isCancelled = true; wsRef.current?.close(); };
-    }, [id, router]);
+    }, [id]); 
 
     // --- HISTORY SNAPSHOTS ---
     useEffect(() => {
@@ -390,13 +411,13 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
         const timeoutId = setTimeout(async () => {
             console.log("Syncing to Go Backend...");
             mutate(rectangleLayers)
-        }, 1500); // Wait 1.5 seconds after the last change
+        }, 30000); 
 
         // 3. THE MAGIC: Cleanup function
         // Every time rectangleLayers changes, React runs this cleanup 
         // which KILLS the previous timer before starting a new one.
         return () => clearTimeout(timeoutId);
-    }, [rectangleLayers]);
+    }, []);
 
     return (
         <main 
