@@ -9,18 +9,14 @@ import (
 )
 
 const (
-	// the maximum time allowed to write message in a second
-	writeWait      = 10 * time.Second
-	// the maximum time allowed to read message in a second
-	pongWait       = 60 * time.Second
-	// the frequeny at which the server sends ping messages to the client
-	pingInterval   = (pongWait * 9) / 10
-	// the maximum size of a message in bytes
+	writeWait      = 10 * time.Second // if server cannot finish sending data in 10 sec give up its saves server resources
+	pongWait       = 60 * time.Second // if the client does not send anything to server in the time span of sixty sec close the connection
+	pingInterval   = (pongWait * 9) // we send a Ping before the 60-second pongWait expires. This gives the client 6 seconds to respond with a "Pong" to reset that 60-second timer.
 	maxMessageSize = 1024 * 1024
 )
 
 type Client struct {
-	ID     string
+	ID     string // the reason we have diff id (generated on spot) and userid is because if a user enters the room in two dif browser tabs the user could kick itself
 	UserId string
 	RoomID string
 	Conn   *websocket.Conn
@@ -75,6 +71,7 @@ func (c *Client) ReadPump(room *Room) {
 }
 
 func (c *Client) WritePump() {
+	// send a ping every 54 second
 	ticker := time.NewTicker(pingInterval)
 	defer func() {
 		ticker.Stop()
@@ -88,14 +85,14 @@ func (c *Client) WritePump() {
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))	// basically if we are not able to write the messag in 10 seconds we are fired!
 			if !ok {
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
+				return // stops the gorountines basically closes the connection on the server side
 			}
 
 			if err := c.Conn.WriteJSON(message); err != nil {
 				return
 			}
 
-		case <-ticker.C:
+		case <-ticker.C: // fires every 54 seconds browser automatically send the pong we dont have to write any js for this
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return

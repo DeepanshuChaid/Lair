@@ -278,11 +278,11 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		roomId := c.Param("roomId")
-		if roomId == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
-			return
-		}
+		// roomId := c.Param("roomId")
+		// if roomId == "" {
+		// 	c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
+		// 	return
+		// }
 
 		ticket := c.Query("ticket")
 		if ticket == "" {
@@ -310,20 +310,20 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 		}
 
 		// Get or create room
-		room, err := hub.GetRoom(roomId)
+		room, err := hub.GetRoom(val)
 		if err != nil {
-			room = NewRoom(roomId, "naam me kya rakha hai", userId)
+			room = NewRoom(val, "naam me kya rakha hai", userId)
 			hub.RegisterRoom <- room
 			go room.Run()
 		}
 
 		// Create client and register
-		client := NewClient(conn, userId, roomId, hub)
+		client := NewClient(conn, userId, val, hub)
 		room.Register <- client
 
 		var rawState json.RawMessage
 		err = database.Pool.QueryRow(c.Request.Context(),
-			"SELECT state FROM room_state WHERE room_id = $1", roomId).Scan(&rawState)
+			"SELECT state FROM room_state WHERE room_id = $1", val).Scan(&rawState)
 		
 		if err == nil && len(rawState) > 0 {
 			// Send current board state as the first message

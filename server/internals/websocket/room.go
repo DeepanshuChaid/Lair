@@ -5,21 +5,23 @@ import (
 	"sync"
 )
 
+// hub {rooms: map[string]*Room, channels handling register and unregister}
+
 type Room struct {
-	ID      string
-	Name    string
+	// INFO
+	ID      string // will be added from the db
+	Name    string // FIXED NAMES NOT SURE WHY I EVEN I ADDED IT
 	OwnerID string
 
 	// string basically represents the client ID, and the value is the pointer to the Client struct. This allows us to easily manage clients in the room, such as broadcasting messages to all clients or removing a client when they disconnect.
 	Clients map[string]*Client
 
 	// State can be any JSON-serializable data structure representing the current state of the room
-	State interface{}
+	State interface{} // any
 
 	Register   chan *Client
 	Unregister chan *Client
 	Broadcast  chan *Message
-
 	Kick chan *string
 
 	// mu is used to synchronize access to the Clients map and State
@@ -37,11 +39,11 @@ func NewRoom(id, name, ownerID string) *Room {
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
 		Broadcast:  make(chan *Message),
-
 		Kick: make(chan *string),
 	}
 }
 
+// basically a background gorountines for managing the clients 
 func (r *Room) Run() {
 	for {
 		select {
@@ -59,6 +61,7 @@ func (r *Room) Run() {
 		}
 	}
 }
+
 
 func (r *Room) registerClient(client *Client) {
 	r.mu.Lock()
@@ -94,6 +97,7 @@ func (r *Room) broadcastMessage(message *Message) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	// send the message to every clients send channel
 	for _, client := range r.Clients {
 		select {
 		case client.Send <- message:
