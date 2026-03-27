@@ -361,6 +361,11 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             isDirty.current = true
         }
 
+        // ================================================== // 
+        // TODO MUST SEND DELTA INSTEAD OF THE WHOLE ROOM LAYERS CUZ IT'S TOO MUCH DATA
+        // ================================================= //
+        const changedLayers = rectangleLayers.filter(l => selection.includes(l.id));
+
         // 2. CRITICAL: If we are in Pencil or Inserting mode, STOP HERE.
         // This prevents the UI from switching back to "Selection" mode 
         // after every single stroke or shape placement.
@@ -427,6 +432,7 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
         // before the 3 seconds are up.
         return () => clearTimeout(timeoutId);
     }, [rectangleLayers, mutate]);
+
 
     return (
         <main 

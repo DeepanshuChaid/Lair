@@ -39,12 +39,15 @@ CREATE TABLE room_state (
 
   room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
 
-  state JSONB NOT NULL DEFAULT '{}',
-
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now(),
-
   UNIQUE(room_id)
+)
+
+CREATE TABLE layers (
+  id TEXT, -- because the id will be generated in the frontend and also that room_id is already enough to query changes in the layers 
+
+  room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+
+  layer JSONB NOT NULL DEFAULT '{}'
 )
 
 CREATE INDEX idx_rooms_owner ON rooms(owner_id);
