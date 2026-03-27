@@ -365,17 +365,18 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
 
     const { mutate } = useMutation({
         mutationFn: async (data: any) => {
-        const res = await API.post(`/api/rooms/${id}/save`, { 
-                layers: data 
-            });
-        return res.data
+            console.log(data)
+            const res = await API.put(`/api/rooms/save/${id}`, { 
+                    layers: data 
+                });
+            return res.data
         },
         onSuccess: () => {
-        toast({ title: "Success", description: "Saved successfully!", variant: "success" });
+            toast({ title: "Success", description: "Saved successfully!", variant: "success" });
         },
         onError: (err: any) => {
-        const message = err?.response?.data?.message || "Something went wrong!";
-        toast({ title: "Error", description: message, variant: "destructive" });
+            const message = err?.response?.data?.message || "Something went wrong!";
+            toast({ title: "Error", description: message, variant: "destructive" });
         },
     });
 
