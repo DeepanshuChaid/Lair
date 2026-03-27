@@ -269,6 +269,47 @@ func VerfiyRoom() gin.HandlerFunc {
 	}
 }
 
+func SaveData() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), time.Second*10)
+		defer cancel()
+
+		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		roomId := c.Param("roomId")
+		if roomId == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
+			return
+		}
+
+		var body struct {
+			layers interface{} `json:"layers"`
+		}
+
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body!"})
+			return
+		}
+
+		_, err := database.Pool.Exec(
+			ctx,
+			"UPDATE SET state = $1 FROM room_state WHERE room_id = $2",
+			body.layers,
+			roomId,
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error!", "details": err.Error()})
+			return
+		}
+		
+		c.JSON(http.StatusOK, gin.H{"message": "Successfully Saved the Room State!"})
+	}
+}
 
 func ServerWs(hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -302,7 +343,7 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 		}
 
 
-		// Upgrade connection
+		// Upgrade connection means convert the http protocol into websocket connection
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to upgrade to WebSocket", "error": err.Error(),})
