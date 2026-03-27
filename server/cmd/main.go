@@ -89,6 +89,7 @@ func main() {
 	protectedRoutes.POST("/ws/add-member/:roomId", websocket.AddMember())
 	protectedRoutes.DELETE("/ws/remove-member/:roomId", websocket.RemoveMember(hub))
 	protectedRoutes.GET("/ws/verify/:roomId", websocket.VerfiyRoom())
+	protectedRoutes.PUT("/rooms/save/:id", websocket.SaveData())
 	protectedRoutes.GET("/ws/:roomId", websocket.ServerWs(hub))
 
 	router.Run(":" + PORT)

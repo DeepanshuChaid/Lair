@@ -10,7 +10,6 @@ import Members from "../members/members";
 import Toolbar from "../toolbar/toolbar";
 import { CursorPresence } from "../cursor-presence";
 import { useAuth } from "@/providers/auth-provider";
-import { LayerPreview } from "../layer-preview";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Rectangle as RectangleTool } from "../boardTools/rectangle";
@@ -19,9 +18,9 @@ import { Ellipse } from "../boardTools/ellipse";
 import { ColorToCss } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
-import debounce from "lodash/debounce";
 import { Path } from "../boardTools/path";
 import API from "@/lib/axios";
+import { useMutation } from "@tanstack/react-query";
 
 const MAX_LAYERS = 500;
 
@@ -358,10 +357,28 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             await API.post(`/api/rooms/${id}/save`, { 
                 layers: layers 
             });
-        } catch (err) {
+        } catch (err: any) {
+            toast({ title: "Error", description: JSON.stringify(err), variant: "destructive" });
             console.error("Failed to save board:", err);
         }
     };
+
+    const { mutate } = useMutation({
+        mutationFn: async (data: any) => {
+        const res = await API.post(`/api/rooms/${id}/save`, { 
+                layers: data 
+            });
+        return res.data
+        },
+        onSuccess: () => {
+        toast({ title: "Success", description: "Saved successfully!", variant: "success" });
+        },
+        onError: (err: any) => {
+        const message = err?.response?.data?.message || "Something went wrong!";
+        toast({ title: "Error", description: message, variant: "destructive" });
+        },
+    });
+
 
 
     useEffect(() => {
@@ -371,7 +388,7 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
         // 2. Start a timer
         const timeoutId = setTimeout(async () => {
             console.log("Syncing to Go Backend...");
-            syncToBackend(rectangleLayers)
+            mutate(rectangleLayers)
         }, 1500); // Wait 1.5 seconds after the last change
 
         // 3. THE MAGIC: Cleanup function

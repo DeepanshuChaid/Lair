@@ -280,14 +280,14 @@ func SaveData() gin.HandlerFunc {
 			return
 		}
 
-		roomId := c.Param("roomId")
+		roomId := c.Param("id")
 		if roomId == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Room ID is required"})
 			return
 		}
 
 		var body struct {
-			layers interface{} `json:"layers"`
+			layers json.RawMessage `json:"layers"`
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -295,12 +295,18 @@ func SaveData() gin.HandlerFunc {
 			return
 		}
 
-		_, err := database.Pool.Exec(
+		result, err := database.Pool.Exec(
 			ctx,
-			"UPDATE SET state = $1 FROM room_state WHERE room_id = $2",
+			"UPDATE room_state SET state = $1 WHERE room_id = $2",
 			body.layers,
 			roomId,
 		)
+
+		// Optional: Check if the room actually exists
+        if result.RowsAffected() == 0 {
+            c.JSON(http.StatusNotFound, gin.H{"message": "Room state not found"})
+            return
+        }
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error!", "details": err.Error()})
@@ -380,3 +386,4 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 		go client.ReadPump(room)
 	}
 }
+
