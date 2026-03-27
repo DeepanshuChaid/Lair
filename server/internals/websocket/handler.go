@@ -287,7 +287,7 @@ func SaveData() gin.HandlerFunc {
 		}
 
 		var body struct {
-			layers json.RawMessage `json:"layers"`
+			Layers json.RawMessage `json:"layers"`
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -295,18 +295,18 @@ func SaveData() gin.HandlerFunc {
 			return
 		}
 
-		result, err := database.Pool.Exec(
+		_, err := database.Pool.Exec(
 			ctx,
 			"UPDATE room_state SET state = $1 WHERE room_id = $2",
-			body.layers,
+			body.Layers,
 			roomId,
 		)
 
 		// Optional: Check if the room actually exists
-        if result.RowsAffected() == 0 {
-            c.JSON(http.StatusNotFound, gin.H{"message": "Room state not found"})
-            return
-        }
+        // if result.RowsAffected() == 0 {
+        //     c.JSON(http.StatusNotFound, gin.H{"message": "Room state not found"})
+        //     return
+        // }
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error!", "details": err.Error()})
