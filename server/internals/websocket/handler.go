@@ -286,9 +286,14 @@ func SaveData() gin.HandlerFunc {
 			return
 		}
 
-		var body struct {
+		type delta struct {
 			ID 	string `json:"id"`
 			Layer json.RawMessage `json:"layer"`
+			Action string `json:"action"`
+		}
+
+		var body struct {
+			Deltas []delta `json:"deltas"`
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -296,16 +301,64 @@ func SaveData() gin.HandlerFunc {
 			return
 		}
 
-		// UPSERT: Create if new, Update if exists
-        _, err := database.Pool.Exec(ctx, `
-            INSERT INTO layers (id, room_id, layer_data)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (id) 
-            DO UPDATE SET layer_data = EXCLUDED.layer_data
-        `, body.ID, roomId, body.Layer)
+		var upIds []string
+		var upData [][]byte
+		var delIds []string
 
+		for _, item := range body.Deltas {
+			if item.Action == "delete" {
+				delIds = append(delIds, item.ID)
+			} else {
+				upIds = append(upIds, item.ID)
+				upData = append(upData, item.Layer)
+			}
+		}
+
+		tx, err := database.Pool.Begin(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error!", "details": err.Error()})
+			return
+		}
+
+		defer tx.Rollback(ctx)
+		
+		roomIds := make([]string, len(upIds))
+		for i := range roomIds {
+			roomIds[i] = roomId
+		}
+
+
+		if len(upIds) > 0 {
+			_, err = tx.Exec(
+				ctx,
+				`
+				INSERT INTO layers (id, room_id, layer_data)
+				SELECT unnest($1::text[]), unnest($2::uuid[]), unnest($3::jsonb[])
+				ON CONFLICT (id) DO UPDATE SET layer_data = EXCLUDED.layer_data
+				`,
+				upIds, roomIds, upData,
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Error upserting layers!", "details": err.Error()})
+				return
+			}
+		}
+
+		if len(delIds) > 0 {
+			_, err = tx.Exec(
+				ctx,
+				`DELETE FROM layers WHERE id = ANY($1::text[])`,
+				delIds,
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Error deleting layers!", "details": err.Error()})
+				return
+			}
+		}
+
+		err = tx.Commit(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error committing transaction!", "details": err.Error()})
 			return
 		}
 		

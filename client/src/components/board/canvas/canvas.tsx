@@ -40,13 +40,15 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     const [rectangleLayers, setRectangleLayers] = useState<Array<{ id: string; layer: any }>>([]);
     const [draftRectangleLayer, setDraftRectangleLayer] = useState<{ id: string; layer: any } | null>(null);
 
+    // Key is ID, Value is { layer, status }
+    
     const [selection, setSelection] = useState<string[]>([]);
-
+    
     const svgRef = useRef<SVGSVGElement | null>(null);
     const insertingStartRef = useRef<Point | null>(null);
     const rectIdCounterRef = useRef(0);
     const didInitHistoryRef = useRef(false);
-
+    
     const isDirty = useRef(false)
 
     // --- WEBSOCKET SETUP ---
@@ -102,10 +104,10 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     // handle before unload
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (isDirty.current) {
-                const data = JSON.stringify({ layers: rectangleLayers });
-                // sendBeacon is more reliable than axios for 'tab close' events
-                navigator.sendBeacon(`/api/rooms/save/${id}`, data);
+            if (dirtyLayers.current.size > 0) {
+                const payload = JSON.stringify(Array.from(dirtyLayers.current.entries()));
+                // sendBeacon is asynchronous and doesn't block the UI/Close
+                // navigator.sendBeacon(`/api/rooms/${id}/save-batch`, payload);
             }
         };
         window.addEventListener("beforeunload", handleBeforeUnload);
@@ -487,6 +489,34 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     //     }
     // }, [rectangleLayers, mutate, isPending]);
 
+    const dirtyLayers = useRef(new Map<string, { layer: any, status: 'update' | 'delete' | 'create' }>()) 
+
+    // 2. When a user moves something (onPointerUp)
+    const onLayerChange = (id: string, newData: any) => {
+        dirtyLayers.current.set(id, { layer: newData, status: 'update' });
+    };
+
+    // 3. When a user deletes something
+    const onLayerDelete = (id: string) => {
+        dirtyLayers.current.set(id, { layer: null, status: 'delete' });
+    };
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (dirtyLayers.current.size === 0) return;
+
+            const payload = Array.from(dirtyLayers.current.entries()).map(([id, data]) => ({
+                id,
+                layer: data.layer,
+                action: data.status
+            }));
+
+            // Send to your Go SaveBatch handler
+            console.log(payload)
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <main 
