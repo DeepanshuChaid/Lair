@@ -347,23 +347,20 @@ func GetRoomMembers() gin.HandlerFunc {
 		// We use COALESCE to handle rooms that might not have members yet
 		query := `
             SELECT 
-                COALESCE(rs.state, '{}'::jsonb),
-                COALESCE(json_agg(json_build_object(
-                    'id', u.id,
-                    'name', u.name,
-                    'email', u.email,
-                    'profile_picture', u.profile_picture,
-                    'role', rm.role
-                )) FILTER (WHERE u.id IS NOT NULL), '[]'::json) AS members
-            FROM rooms r
-            LEFT JOIN room_member rm ON r.id = rm.room_id
-            LEFT JOIN users u ON rm.user_id = u.id
-            WHERE r.id = $1
-            GROUP BY r.id;`
+				COALESCE(json_agg(json_build_object(
+					'id', u.id,
+					'name', u.name,
+					'email', u.email,
+					'profile_picture', u.profile_picture,
+					'role', rm.role
+				)) FILTER (WHERE u.id IS NOT NULL), '[]'::json) AS members
+			FROM rooms r
+			LEFT JOIN room_member rm ON r.id = rm.room_id
+			LEFT JOIN users u ON rm.user_id = u.id
+			WHERE r.id = $1
+			GROUP BY r.id;`
 
-		err = database.Pool.QueryRow(ctx, query, roomId).Scan(
-			 &room.Members,
-		)
+        err = database.Pool.QueryRow(ctx, query, roomId).Scan(&room.Members)
 
 		if err != nil {
 			// Log the actual error for debugging

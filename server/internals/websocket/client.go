@@ -11,7 +11,7 @@ import (
 const (
 	writeWait      = 10 * time.Second // if server cannot finish sending data in 10 sec give up its saves server resources
 	pongWait       = 60 * time.Second // if the client does not send anything to server in the time span of sixty sec close the connection
-	pingInterval   = (pongWait * 9) // we send a Ping before the 60-second pongWait expires. This gives the client 6 seconds to respond with a "Pong" to reset that 60-second timer.
+	pingInterval   = (pongWait * 9) / 10// we send a Ping before the 60-second pongWait expires. This gives the client 6 seconds to respond with a "Pong" to reset that 60-second timer.
 	maxMessageSize = 1024 * 1024
 )
 
@@ -99,4 +99,4 @@ func (c *Client) WritePump() {
 			}
 		}
 	}
-}
+} 

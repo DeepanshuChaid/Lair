@@ -23,6 +23,7 @@ export default function Members({id}: {id: string}) {
         },
         staleTime: 5 * 60 * 1000, // Consider data "fresh" for 5 mins (won't refetch on window focus)
         refetchInterval: 10000,
+        
     })
     
     if (isLoading) return <MembersSkeleton />

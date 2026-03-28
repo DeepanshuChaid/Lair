@@ -22,9 +22,7 @@ import { Path } from "../boardTools/path";
 import API from "@/lib/axios";
 import { useMutation } from "@tanstack/react-query";
 
-const MAX_LAYERS = 500;
-
-export default function Canvas({ id, title }: { id: string, title: string }) {
+export default function Canvas({ id, title, dirtyLayers }: { id: string, title: string, dirtyLayers: React.MutableRefObject<Map<string, { layer: any, status: 'update' | 'delete' | 'create' }>> }) {
     const [canvasState, setCanvasState] = useState<CanvasState>({ mode: CanvasMode.None });
     const { undo, redo, canUndo, canRedo, saveState, currentState } = useHistory();
 
@@ -50,6 +48,16 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     const didInitHistoryRef = useRef(false);
     
     const isDirty = useRef(false)
+
+    // 2. When a user moves something (onPointerUp)
+    const onLayerChange = useCallback((id: string, newData: any) => {
+        dirtyLayers.current.set(id, { layer: newData, status: 'update' });
+    }, [dirtyLayers])
+
+    // 3. When a user deletes something
+    const onLayerDelete = useCallback((id: string) => {
+        dirtyLayers.current.set(id, { layer: null, status: 'delete' });
+    }, [dirtyLayers])
 
     // --- WEBSOCKET SETUP ---
     useEffect(() => {
@@ -107,12 +115,16 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             if (dirtyLayers.current.size > 0) {
                 const payload = JSON.stringify(Array.from(dirtyLayers.current.entries()));
                 // sendBeacon is asynchronous and doesn't block the UI/Close
-                // navigator.sendBeacon(`/api/rooms/${id}/save-batch`, payload);
+                navigator.sendBeacon(`/api/rooms/${id}/save-batch`, payload);
             }
         };
         window.addEventListener("beforeunload", handleBeforeUnload);
         return () => window.removeEventListener("beforeunload", handleBeforeUnload);
     }, [rectangleLayers, id]);
+
+
+
+
 
     // --- HISTORY SNAPSHOTS ---
     useEffect(() => {
@@ -272,30 +284,25 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
         if (canvasState.mode === CanvasMode.Pencil) {
             if (canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
                 const newId = `path-${rectIdCounterRef.current++}`;
-                const nextLayers = [
-                    ...rectangleLayers,
-                    {
-                        id: newId,
-                        layer: {
-                            type: layerType.Path,
-                            x: 0, y: 0, width: 0, height: 0,
-                            fill: lastUsedColor,
-                            points: canvasState.pencilPoints,
-                        }
-                    }
-                ];
+                const newLayer = {
+                    type: layerType.Path,
+                    x: 0, y: 0, width: 0, height: 0,
+                    fill: lastUsedColor,
+                    points: canvasState.pencilPoints,
+                };
+                
+                const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
                 setRectangleLayers(nextLayers);
                 saveState(JSON.stringify(nextLayers));
 
-                isDirty.current = true
+                // SYNC TO DIRTY:
+                onLayerChange(newId, newLayer); 
+
+                setCanvasState({
+                    mode: CanvasMode.Pencil,
+                    pencilPoints: []
+                })
             }
-            
-            // Clear the temporary points but KEEP the Pencil mode active 
-            // so the user can draw multiple strokes without re-selecting the tool
-            setCanvasState({ 
-                mode: CanvasMode.Pencil, 
-                pencilPoints: [] 
-            });
         }
 
         // --- SHAPE FINALIZATION ---
@@ -311,15 +318,15 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
                 x = start.x - 50; y = start.y - 50;
             }
 
-            const nextLayers = [
-                ...rectangleLayers,
-                {
-                    id: `layer-${rectIdCounterRef.current++}`,
-                    layer: { type: canvasState.layerType, x, y, width, height, fill: lastUsedColor, value: "" }
-                }
-            ];
+            const newId = `layer-${rectIdCounterRef.current++}`;
+            const newLayer = { type: canvasState.layerType, x, y, width, height, fill: lastUsedColor, value: "" };
+            
+            const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
             setRectangleLayers(nextLayers);
             saveState(JSON.stringify(nextLayers));
+
+            // SYNC TO DIRTY:
+            onLayerChange(newId, newLayer);
             
             insertingStartRef.current = null;
             setDraftRectangleLayer(null);
@@ -404,6 +411,12 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             layersToSync = rectangleLayers.filter(l => selection.includes(l.id));
             saveState(JSON.stringify(rectangleLayers));
             isDirty.current = true;
+
+            rectangleLayers.forEach((item) => {
+                if (selection.includes(item.id)) {
+                    onLayerChange(item.id, item.layer);
+                }
+            });
         }
 
         // UNCOMMENT THIS AFTER BIT FOCUSED API IS READY
@@ -443,80 +456,6 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
 
     const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
 
-    // const { mutate, isPending } = useMutation({
-    //     mutationFn: async (data: any) => {
-    //         console.log(data)
-    //         const res = await API.put(`/api/rooms/save/${id}`, { 
-    //                 layers: data 
-    //             });
-    //         isDirty.current = false;
-    //         return res.data
-    //     },
-    //     onSuccess: () => {
-    //         toast({ title: "Success", description: "Saved successfully!", variant: "success" });
-    //     },
-    //     onError: (err: any) => {
-    //         const message = err?.response?.data?.message || "Something went wrong!";
-    //         toast({ title: "Error", description: message, variant: "destructive" });
-    //     },
-    // });
-
-
-
-    // useEffect(() => {
-    //     // 1. Only sync if there's actually something to save and it's 'dirty'
-    //     if (rectangleLayers.length === 0 || !isDirty.current) return;
-
-    //     // 2. Set a 3-second debounce timer
-    //     const timeoutId = setTimeout(() => {
-    //         console.log("Auto-syncing to Backend...");
-    //         mutate(rectangleLayers);
-    //     }, 3000); 
-
-    //     // 3. Cleanup: This kills the previous timer if the user moves something 
-    //     // before the 3 seconds are up.
-    //     return () => clearTimeout(timeoutId);
-    // }, [rectangleLayers, mutate]);
-
-
-    // const handleManualSave = useCallback(() => {
-    //     // Check the ref inside the function, not in the JSX
-    //     if (isDirty.current && !isPending) {
-    //         console.log("Manual save triggered");
-    //         mutate(rectangleLayers);
-    //     } else {
-    //         console.log("Save skipped: not dirty or already pending");
-    //     }
-    // }, [rectangleLayers, mutate, isPending]);
-
-    const dirtyLayers = useRef(new Map<string, { layer: any, status: 'update' | 'delete' | 'create' }>()) 
-
-    // 2. When a user moves something (onPointerUp)
-    const onLayerChange = (id: string, newData: any) => {
-        dirtyLayers.current.set(id, { layer: newData, status: 'update' });
-    };
-
-    // 3. When a user deletes something
-    const onLayerDelete = (id: string) => {
-        dirtyLayers.current.set(id, { layer: null, status: 'delete' });
-    };
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (dirtyLayers.current.size === 0) return;
-
-            const payload = Array.from(dirtyLayers.current.entries()).map(([id, data]) => ({
-                id,
-                layer: data.layer,
-                action: data.status
-            }));
-
-            // Send to your Go SaveBatch handler
-            console.log(payload)
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, []);
 
     return (
         <main 
