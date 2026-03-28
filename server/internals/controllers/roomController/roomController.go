@@ -148,21 +148,6 @@ func CreateRoom() gin.HandlerFunc {
 			return
 		}
 
-		// initialize room state
-		_, err = tx.Exec(ctx,
-			`INSERT INTO room_state (room_id, state)
-			VALUES ($1, '{}'::jsonb)
-			ON CONFLICT (room_id) DO NOTHING`,
-			roomId,
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": "Failed to initialize room state",
-				"details": err.Error(),
-			})
-			return
-		}
-
 		// add owner as member
 		_, err = tx.Exec(ctx,
 			"INSERT INTO room_member (room_id, user_id) VALUES ($1, $2)",
@@ -345,7 +330,6 @@ func GetRoomMembers() gin.HandlerFunc {
 		}
 
 		var room struct {
-			State        json.RawMessage `json:"state"`
 			Members      json.RawMessage `json:"members"` // Scan the whole JSON array here
 		}
 
@@ -372,14 +356,13 @@ func GetRoomMembers() gin.HandlerFunc {
                     'role', rm.role
                 )) FILTER (WHERE u.id IS NOT NULL), '[]'::json) AS members
             FROM rooms r
-            LEFT JOIN room_state rs ON r.id = rs.room_id
             LEFT JOIN room_member rm ON r.id = rm.room_id
             LEFT JOIN users u ON rm.user_id = u.id
             WHERE r.id = $1
-            GROUP BY r.id, rs.state;`
+            GROUP BY r.id;`
 
 		err = database.Pool.QueryRow(ctx, query, roomId).Scan(
-			 &room.State, &room.Members,
+			 &room.Members,
 		)
 
 		if err != nil {

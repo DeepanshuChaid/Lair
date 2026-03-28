@@ -361,10 +361,19 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             isDirty.current = true
         }
 
-        // ================================================== // 
-        // TODO MUST SEND DELTA INSTEAD OF THE WHOLE ROOM LAYERS CUZ IT'S TOO MUCH DATA
-        // ================================================= //
-        const changedLayers = rectangleLayers.filter(l => selection.includes(l.id));
+        let layersToSync: Array<{ id: string; layer: any }> = [];
+
+        if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
+            // Only sync what's in the current selection
+            layersToSync = rectangleLayers.filter(l => selection.includes(l.id));
+            saveState(JSON.stringify(rectangleLayers));
+            isDirty.current = true;
+        }
+
+        // UNCOMMENT THIS AFTER BIT FOCUSED API IS READY
+        // if (layersToSync.length > 0) {
+        //     mutate(layersToSync); // Send ONLY the changed layers
+        // }
 
         // 2. CRITICAL: If we are in Pencil or Inserting mode, STOP HERE.
         // This prevents the UI from switching back to "Selection" mode 
@@ -434,13 +443,24 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     }, [rectangleLayers, mutate]);
 
 
+    const handleManualSave = useCallback(() => {
+        // Check the ref inside the function, not in the JSX
+        if (isDirty.current && !isPending) {
+            console.log("Manual save triggered");
+            mutate(rectangleLayers);
+        } else {
+            console.log("Save skipped: not dirty or already pending");
+        }
+    }, [rectangleLayers, mutate, isPending]);
+
+
     return (
         <main 
             className="h-full w-full relative bg-neutral-100 touch-none overflow-hidden" 
             onPointerMove={onPointerMove} 
             onPointerUp={onPointerUp}
         >   
-            <Info id={id} title={title} onClick={() => mutate(rectangleLayers)} />
+            <Info id={id} title={title} onClick={handleManualSave} />
             <Members id={id} />
             <Toolbar 
                 canvasState={canvasState} 
