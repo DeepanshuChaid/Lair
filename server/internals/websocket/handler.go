@@ -411,7 +411,7 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
 			rawState = append(rawState, layer)
 		}
 
-		rows.Close()
+		defer rows.Close()
         
         if err == nil && len(rawState) > 0 {
             client.Send <- &Message{

@@ -80,6 +80,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     if (data.type === "init_state") {
                         const layers = data.content; 
                         if (Array.isArray(layers)) {
+                            console.log(layers)
                             setRectangleLayers(layers);
                             // Sync history so the user doesn't "undo" into an empty screen
                             saveState(JSON.stringify(layers));
@@ -447,17 +448,24 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         
         // If items are selected, update their color immediately
         if (selection.length > 0) {
-            const nextLayers = rectangleLayers.map((item) => 
-                selection.includes(item.id) 
-                    ? { ...item, layer: { ...item.layer, fill } } 
-                    : item
-            );
+            const nextLayers = rectangleLayers.map((item) => {
+                if (selection.includes(item.id)) {
+                    const updatedLayer = { ...item.layer, fill };
+                    dirtyLayers.current.set(item.id, { layer: updatedLayer, status: 'update' });
+                    return { ...item, layer: updatedLayer };
+                }
+                return item;
+            });
             setRectangleLayers(nextLayers);
             saveState(JSON.stringify(nextLayers));
         }
-    }, [selection, rectangleLayers, saveState]);
+    }, [selection, rectangleLayers, saveState, dirtyLayers]);
 
     const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
+
+    useEffect(() => {
+        console.log(rectangleLayers)
+    }, [])
 
 
     return (
@@ -505,6 +513,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                                 layer={draftRectangleLayer.layer} 
                                 onPointerDown={() => {}} 
                                 selectionColor={strokeColor} 
+                                onValueChange={() => {}}
                             />
                         ) : draftRectangleLayer.layer.type === layerType.Note ? (
                             <Note 
@@ -512,6 +521,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                                 layer={draftRectangleLayer.layer} 
                                 onPointerDown={() => {}} 
                                 selectionColor={strokeColor} 
+                                onValueChange={() => {}}
                             />
                         ) : (
                             <RectangleTool 
