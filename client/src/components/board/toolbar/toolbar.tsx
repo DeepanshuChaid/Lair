@@ -3,7 +3,6 @@
 import { 
     MousePointer, 
     Pencil, 
-    Eraser, 
     Circle, 
     Type, 
     Undo, 
@@ -13,8 +12,8 @@ import {
     Trash2
 } from "lucide-react";
 
-import { ColorPicker } from "../color-picker"; // Adjust path as needed
-import { color, CanvasState, CanvasMode } from "@/types/canvas";
+import { ColorPicker } from "../color-picker";
+import { color, CanvasState, CanvasMode, layerType } from "@/types/canvas";
 import { ToolButton } from "../tool-button/tool-button";
 
 interface ToolbarProps {
@@ -57,42 +56,47 @@ export default function Toolbar ({
                     }
                     onClick={() => setCanvasState({ mode: CanvasMode.None })}
                 />
+                
                 <ToolButton 
                     label="Text"
                     icon={Type}
-                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Text"} // Logic depends on how you handle 'Inserting'
+                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === layerType.Text} 
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
-                        layerType: "Text" // Assuming your Inserting state takes a layerType
-                    } as any)} 
+                        layerType: layerType.Text 
+                    })} 
                 />
+
                 <ToolButton 
                     label="Sticky note"
                     icon={StickyNote}
-                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Note"}
+                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === layerType.Note}
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
-                        layerType: "Note" 
-                    } as any)}
+                        layerType: layerType.Note 
+                    })}
                 />
+
                 <ToolButton 
                     label="Rectangle"
                     icon={Square}
-                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Rectangle"}
+                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === layerType.Rectangle}
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
-                        layerType: "Rectangle" 
-                    } as any)}
+                        layerType: layerType.Rectangle 
+                    })}
                 />
+
                 <ToolButton 
                     label="Circle"
                     icon={Circle}
-                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === "Ellipse"}
+                    isActive={canvasState.mode === CanvasMode.Inserting && canvasState.layerType === layerType.Ellipse}
                     onClick={() => setCanvasState({ 
                         mode: CanvasMode.Inserting, 
-                        layerType: "Ellipse" 
-                    } as any)}
+                        layerType: layerType.Ellipse 
+                    })}
                 />
+
                 <ToolButton 
                     label="Pencil"
                     icon={Pencil}
@@ -100,7 +104,6 @@ export default function Toolbar ({
                     onClick={() => setCanvasState({ mode: CanvasMode.Pencil })}
                 />
 
-                {/* NEW DELETE BUTTON */}
                 <ToolButton 
                     label="Delete"
                     icon={Trash2}
@@ -109,7 +112,6 @@ export default function Toolbar ({
                 />
             </div>
 
-            {/* COLOR PICKER */}
             <div className="flex flex-col items-center gap-y-4 border-t border-neutral-200 pt-4">
                 <ColorPicker 
                     lastUsedColor={lastUsedColor} 
@@ -132,11 +134,5 @@ export default function Toolbar ({
                 />
             </div>
         </div>
-    );
-}
-
-export function ToolbarSkeleton() {
-    return (
-        <div className="absolute top-[50%] -translate-y-[50%] left-2 flex flex-col gap-y-4 bg-white h-[360px] w-[52px] shadow-md rounded-md" />
     );
 }

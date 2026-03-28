@@ -26,6 +26,8 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
             }))
         };
 
+        console.log(payLoad)
+
         const { data } = await API.put(`/api/rooms/save/${id}`, payLoad);
         return data;
     },
@@ -40,7 +42,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     const interval = setInterval(() => {
       mutate()
-    }, 10000)
+    }, 2000)
 
     return () => clearInterval(interval)
   }, [])
