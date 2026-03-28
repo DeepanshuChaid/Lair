@@ -33,6 +33,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = await API.get("/api/user")
       return data.user
     },
+    // --- CACHING CONFIG ---
+    staleTime: 1000 * 60 * 5, // Data is considered fresh for 5 minutes
+    gcTime: 1000 * 60 * 30,    // Keep the data in cache for 30 mins even if unused
+    retry: false,              // Don't spam the API if the user isn't logged in
+    refetchOnWindowFocus: false, // Prevents refetching every time you switch tabs
   })
 
 

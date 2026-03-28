@@ -22,7 +22,7 @@ import { Path } from "../boardTools/path";
 import API from "@/lib/axios";
 import { useMutation } from "@tanstack/react-query";
 
-export default function Canvas({ id, title, dirtyLayers }: { id: string, title: string, dirtyLayers: React.MutableRefObject<Map<string, { layer: any, status: 'update' | 'delete' | 'create' }>> }) {
+export default function Canvas({ id, title, dirtyLayers, save }: { id: string, title: string, dirtyLayers: React.MutableRefObject<Map<string, { layer: any, status: 'update' | 'delete' | 'create' }>>, save: () => void }) {
     const [canvasState, setCanvasState] = useState<CanvasState>({ mode: CanvasMode.None });
     const { undo, redo, canUndo, canRedo, saveState, currentState } = useHistory();
 
@@ -149,6 +149,11 @@ export default function Canvas({ id, title, dirtyLayers }: { id: string, title: 
     const deleteLayers = useCallback(() => {
         if (selection.length === 0) return;
 
+        // Track every deleted ID in the dirty ref
+        selection.forEach(id => {
+            dirtyLayers.current.set(id, { layer: null, status: 'delete' });
+        });
+
         const nextLayers = rectangleLayers.filter(
             (layer) => !selection.includes(layer.id)
         );
@@ -156,8 +161,7 @@ export default function Canvas({ id, title, dirtyLayers }: { id: string, title: 
         setRectangleLayers(nextLayers);
         saveState(JSON.stringify(nextLayers));
         setSelection([]);
-        isDirty.current = true;
-    }, [selection, rectangleLayers, saveState]);
+    }, [selection, rectangleLayers, saveState, dirtyLayers]);
 
     // --- KEYBOARD SHORTCUTS ---
     useEffect(() => {
@@ -398,46 +402,45 @@ export default function Canvas({ id, title, dirtyLayers }: { id: string, title: 
     }, [canvasState, selection, clientToWorld, user?.name]);
 
     const onPointerUp = useCallback(() => {
-        // 1. If we were moving or resizing, save the final state to history
-        if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
-            saveState(JSON.stringify(rectangleLayers));
-            isDirty.current = true
-        }
+        if (canvasState.mode === CanvasMode.None) return;
 
-        let layersToSync: Array<{ id: string; layer: any }> = [];
-
+        // Capture moving or resizing
         if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
-            // Only sync what's in the current selection
-            layersToSync = rectangleLayers.filter(l => selection.includes(l.id));
             saveState(JSON.stringify(rectangleLayers));
-            isDirty.current = true;
-
+            
+            // Sync the final state of selected layers to the dirty ref
             rectangleLayers.forEach((item) => {
                 if (selection.includes(item.id)) {
-                    onLayerChange(item.id, item.layer);
+                    dirtyLayers.current.set(item.id, { 
+                        layer: item.layer, 
+                        status: 'update' 
+                    });
                 }
             });
         }
 
-        // UNCOMMENT THIS AFTER BIT FOCUSED API IS READY
-        // if (layersToSync.length > 0) {
-        //     mutate(layersToSync); // Send ONLY the changed layers
-        // }
-
-        // 2. CRITICAL: If we are in Pencil or Inserting mode, STOP HERE.
-        // This prevents the UI from switching back to "Selection" mode 
-        // after every single stroke or shape placement.
-        if (
-            canvasState.mode === CanvasMode.Pencil || 
-            canvasState.mode === CanvasMode.Inserting
+        // Reset UI state but keep the tool selected if it's Pencil or Inserting
+        if (
+            canvasState.mode !== CanvasMode.Pencil && 
+            canvasState.mode !== CanvasMode.Inserting
         ) {
-            return; 
-        }
+            setCanvasState({ mode: CanvasMode.None });
+        }
+    }, [canvasState.mode, rectangleLayers, saveState, selection, dirtyLayers]);
 
-        // 3. For everything else (SelectionNet, etc.), reset to None
-        setCanvasState({ mode: CanvasMode.None });
-        isDirty.current = true;
-    }, [canvasState.mode, rectangleLayers, saveState]);
+    const handleValueChange = useCallback((layerId: string, newValue: string) => {
+        const nextLayers = rectangleLayers.map((l) => {
+            if (l.id === layerId) {
+                const updated = { ...l, layer: { ...l.layer, value: newValue } };
+                // Sync to dirtyLayers immediately on text change
+                dirtyLayers.current.set(layerId, { layer: updated.layer, status: 'update' });
+                return updated;
+            }
+            return l;
+        });
+        setRectangleLayers(nextLayers);
+        saveState(JSON.stringify(nextLayers));
+    }, [rectangleLayers, saveState, dirtyLayers]);
 
     const onChangeColor = useCallback((fill: color) => {
         setLastUsedColor(fill);
@@ -463,7 +466,7 @@ export default function Canvas({ id, title, dirtyLayers }: { id: string, title: 
             onPointerMove={onPointerMove} 
             onPointerUp={onPointerUp}
         >   
-            <Info id={id} title={title} onClick={() => {}} />
+            <Info id={id} title={title} onClick={() => {save()}} />
             <Members id={id} />
             <Toolbar 
                 canvasState={canvasState} 
@@ -559,13 +562,7 @@ export default function Canvas({ id, title, dirtyLayers }: { id: string, title: 
                                     layer={layer as any}
                                     onPointerDown={onLayerPointerDown}
                                     selectionColor={selectionColor}
-                                    onValueChange={(newValue) => {
-                                        const nextLayers = rectangleLayers.map((l) => 
-                                            l.id === layerId ? { ...l, layer: { ...l.layer, value: newValue } } : l
-                                        );
-                                        setRectangleLayers(nextLayers);
-                                        saveState(JSON.stringify(nextLayers));
-                                    }}
+                                    onValueChange={(val) => handleValueChange(layerId, val)} // Using the fixed handler
                                 />
                             );
                         }

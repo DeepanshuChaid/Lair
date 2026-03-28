@@ -18,14 +18,19 @@ import {
 import { NewBoardDialog } from "@/components/dashboard/new-board-dialog/new-board-dialog";
 import { useState } from "react";
 import { UploadProfilePicture } from "../upload-profile-picture/upload-profile-picture";
+import { useQueryClient } from "@tanstack/react-query";
 
 export const TopNav = () => {
+
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const [showUploadDialog, setShowUploadDialog] = useState(false);
 
   const handleLogout = async () => {
     try {
       await API.post("/auth/logout");
+      queryClient.setQueryData(["user"], null); // Manually clear the cache
+      queryClient.removeQueries(); // Optional: wipe everything if it's a deep clean
       window.location.href = "/login";
       toast({
         title: "Success",

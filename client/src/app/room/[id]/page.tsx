@@ -16,23 +16,23 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
 
   const {mutate} = useMutation({
     mutationFn: async() => {
-      const payLoad = {
-        deltas: Array.from(dirtyLayers.current.entries()).map(([id, { layer, status }]) => ({
-          id,
-          action: status,
-          layer
-        }))
-      }
+      if (dirtyLayers.current.size === 0) return; // Don't ping if no changes
 
-      const {data} = await API.put(`/api/rooms/save/${id}`, payLoad)
-      return data
+        const payLoad = {
+            deltas: Array.from(dirtyLayers.current.entries()).map(([id, { layer, status }]) => ({
+                id,
+                action: status,
+                layer
+            }))
+        };
+
+        const { data } = await API.put(`/api/rooms/save/${id}`, payLoad);
+        return data;
     },
     onSuccess: () => {
-      console.log(dirtyLayers)
       dirtyLayers.current.clear()
     },
     onError: (err) => {
-      console.log(dirtyLayers)
       console.error(err)
     }
   })
@@ -40,7 +40,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     const interval = setInterval(() => {
       mutate()
-    }, 5000)
+    }, 10000)
 
     return () => clearInterval(interval)
   }, [])
@@ -79,7 +79,8 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   return (
     <div className="w-full h-full flex items-center justify-center">
       {/* <h1 className="text-3xl font-bold">{id}</h1> */}
-      <Canvas id={id} title={title || ""} dirtyLayers={dirtyLayers} />
+      <Canvas id={id} title={title || ""} dirtyLayers={dirtyLayers} save={mutate}/>
     </div>
   )
 }
+
