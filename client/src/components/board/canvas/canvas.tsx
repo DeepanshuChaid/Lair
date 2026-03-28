@@ -59,6 +59,10 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         dirtyLayers.current.set(id, { layer: null, status: 'delete' });
     }, [dirtyLayers])
 
+    // useEffect(() => {
+    //     console.log(rectangleLayers)
+    // }, [rectangleLayers])
+
     // --- WEBSOCKET SETUP ---
     useEffect(() => {
         let isCancelled = false;
@@ -80,7 +84,6 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     if (data.type === "init_state") {
                         const layers = data.content; 
                         if (Array.isArray(layers)) {
-                            console.log(layers)
                             setRectangleLayers(layers);
                             // Sync history so the user doesn't "undo" into an empty screen
                             saveState(JSON.stringify(layers));
@@ -93,6 +96,26 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                             rectIdCounterRef.current = maxId + 1;
                         }
                     }
+
+                    if (data.type === "LAYER_UPDATE") {
+                        console.log(data)
+                        const layer = data.content;
+                        const id = data.id
+                        setRectangleLayers(data.content)
+                    }
+//                     {
+//     "fill": {
+//         "b": 42,
+//         "g": 142,
+//         "r": 252
+//     },
+//     "height": 213.60000610351562,
+//     "type": "Rectangle",
+//     "value": "",
+//     "width": 162.40000915527344,
+//     "x": 236.97776794433594,
+//     "y": 243.75558471679688
+// }
 
                     // 2. Handle Real-time Cursors
                     if (data.type === "CURSOR_MOVE") {
@@ -416,6 +439,10 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                         layer: item.layer, 
                         status: 'update' 
                     });
+                    // +++++++++++++++++++++++++++++++++++++++++ //
+                    // WRITTEN BY ME MYSELF ===================== //
+                    // +++++++++++++++++++++++++++++++++++++++++ //
+                    wsRef?.current?.send(JSON.stringify({type: "LAYER_UPDATE", content: rectangleLayers}))
                 }
             });
         }

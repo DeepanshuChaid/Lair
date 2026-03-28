@@ -89,7 +89,7 @@ func (c *Client) WritePump() {
 			}
 
 			if err := c.Conn.WriteJSON(message); err != nil {
-				log.Println(message)
+				log.Println(message, err)
 				return
 			}
 
