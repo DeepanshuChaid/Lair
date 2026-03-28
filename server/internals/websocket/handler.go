@@ -287,7 +287,8 @@ func SaveData() gin.HandlerFunc {
 		}
 
 		var body struct {
-			Layers json.RawMessage `json:"layers"`
+			ID 	string `json:"id"`
+			Layer json.RawMessage `json:"layer"`
 		}
 
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -295,19 +296,20 @@ func SaveData() gin.HandlerFunc {
 			return
 		}
 
-		_, err := database.Pool.Exec(
-			ctx,
-			"UPDATE room_state SET state = $1 WHERE room_id = $2",
-			body.Layers,
-			roomId,
-		)
+		// UPSERT: Create if new, Update if exists
+        _, err := database.Pool.Exec(ctx, `
+            INSERT INTO layers (id, room_id, layer_data)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (id) 
+            DO UPDATE SET layer_data = EXCLUDED.layer_data
+        `, body.ID, roomId, body.Layer)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error!", "details": err.Error()})
 			return
 		}
 		
-		c.JSON(http.StatusOK, gin.H{"message": "Successfully Saved the Room State!"})
+		c.Status(http.StatusOK)
 	}
 }
 
@@ -338,9 +340,25 @@ func ServerWs(hub *Hub) gin.HandlerFunc {
         client := NewClient(conn, userId, roomId, hub)
         room.Register <- client
 
-        var rawState json.RawMessage
-        err = database.Pool.QueryRow(c.Request.Context(),
-            "SELECT state FROM room_state WHERE room_id = $1", roomId).Scan(&rawState)
+        var rawState []struct {
+			ID string `json:"id"`
+			Layer json.RawMessage `json:"layer"`
+		}
+        rows, err := database.Pool.Query(c.Request.Context(),
+            "SELECT id, layer_data FROM layers WHERE room_id = $1", roomId)
+
+		for rows.Next() {
+			var layer struct {
+				ID string `json:"id"`
+				Layer json.RawMessage `json:"layer"`
+			}
+			if err := rows.Scan(&layer.ID, &layer.Layer); err != nil {
+				return
+			}
+			rawState = append(rawState, layer)
+		}
+
+		rows.Close()
         
         if err == nil && len(rawState) > 0 {
             client.Send <- &Message{

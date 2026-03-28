@@ -27,14 +27,11 @@ type RoomMember struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type RoomState struct {
+type Layers struct {
 	ID string `json:"id"`
 	RoomId string `json:"roomId"`
 	
-	State string `json:"state"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	LayerData string `json:"layerData"`
 }
 
 // func (rs *RoomState) UpdateState(newState string) {

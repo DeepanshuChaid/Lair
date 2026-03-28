@@ -9,7 +9,7 @@ type Message struct {
 	RoomId  string          `json:"roomId"`
 	Type    string          `json:"type"`
 	UserId  string          `json:"userId"`
-	Content json.RawMessage `json:"content"`
+	Content interface{}	    `json:"content"`
 	Version int             `json:"version"`
 	SentAt  int64           `json:"sentAt"`
 }

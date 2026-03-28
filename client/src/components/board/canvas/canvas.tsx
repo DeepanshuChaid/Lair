@@ -40,6 +40,8 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     const [rectangleLayers, setRectangleLayers] = useState<Array<{ id: string; layer: any }>>([]);
     const [draftRectangleLayer, setDraftRectangleLayer] = useState<{ id: string; layer: any } | null>(null);
 
+    const [selection, setSelection] = useState<string[]>([]);
+
     const svgRef = useRef<SVGSVGElement | null>(null);
     const insertingStartRef = useRef<Point | null>(null);
     const rectIdCounterRef = useRef(0);
@@ -66,7 +68,7 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
 
                     // 1. Handle Initial State from Backend
                     if (data.type === "init_state") {
-                        const layers = data.content; // This is the json.RawMessage from Go
+                        const layers = data.content; 
                         if (Array.isArray(layers)) {
                             setRectangleLayers(layers);
                             // Sync history so the user doesn't "undo" into an empty screen
@@ -130,19 +132,53 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
         }
     }, [currentState]);
 
+    const deleteLayers = useCallback(() => {
+        if (selection.length === 0) return;
+
+        const nextLayers = rectangleLayers.filter(
+            (layer) => !selection.includes(layer.id)
+        );
+
+        setRectangleLayers(nextLayers);
+        saveState(JSON.stringify(nextLayers));
+        setSelection([]);
+        isDirty.current = true;
+    }, [selection, rectangleLayers, saveState]);
+
     // --- KEYBOARD SHORTCUTS ---
     useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            const target = e.target as HTMLElement | null;
-            if (target?.tagName?.toLowerCase() === "input" || target?.tagName?.toLowerCase() === "textarea" || target?.isContentEditable) return;
-            if (!e.ctrlKey) return;
-            if (e.key === "z" || e.key === "Z") { e.preventDefault(); undo(); }
-            if (e.key === "y" || e.key === "Y") { e.preventDefault(); redo(); }
-            if (e.key === "s" || e.key === "S") { e.preventDefault(); if (!isPending) mutate(rectangleLayers); }
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [undo, redo]);
+    const onKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement | null;
+        
+        // 1. Don't trigger if user is typing in an input
+        if (
+            target?.tagName?.toLowerCase() === "input" || 
+            target?.tagName?.toLowerCase() === "textarea" || 
+            target?.isContentEditable
+        ) return;
+
+        // 2. Handle Delete/Backspace (No Ctrl required)
+        if (e.key === "Delete" || e.key === "Backspace") {
+            deleteLayers();
+            return; // Exit early
+        }
+
+        // 3. Handle Ctrl-based shortcuts
+        if (!e.ctrlKey && !e.metaKey) return;
+
+        if (e.key === "z" || e.key === "Z") {
+            e.preventDefault();
+            undo();
+        }
+        if (e.key === "y" || e.key === "Y") {
+            e.preventDefault();
+            redo();
+        }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+}, [undo, redo, deleteLayers]);
 
     // --- CAMERA / ZOOM LOGIC ---
     const onWheel = useCallback((e: WheelEvent) => {
@@ -304,8 +340,6 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
     }, [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState]);
 
 
-
-    const [selection, setSelection] = useState<string[]>([]);
     
     const selectionBounds = useMemo(() => {
         const selectedLayers = rectangleLayers.filter(l => selection.includes(l.id));
@@ -407,51 +441,51 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
 
     const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
 
-    const { mutate, isPending } = useMutation({
-        mutationFn: async (data: any) => {
-            console.log(data)
-            const res = await API.put(`/api/rooms/save/${id}`, { 
-                    layers: data 
-                });
-            isDirty.current = false;
-            return res.data
-        },
-        onSuccess: () => {
-            toast({ title: "Success", description: "Saved successfully!", variant: "success" });
-        },
-        onError: (err: any) => {
-            const message = err?.response?.data?.message || "Something went wrong!";
-            toast({ title: "Error", description: message, variant: "destructive" });
-        },
-    });
+    // const { mutate, isPending } = useMutation({
+    //     mutationFn: async (data: any) => {
+    //         console.log(data)
+    //         const res = await API.put(`/api/rooms/save/${id}`, { 
+    //                 layers: data 
+    //             });
+    //         isDirty.current = false;
+    //         return res.data
+    //     },
+    //     onSuccess: () => {
+    //         toast({ title: "Success", description: "Saved successfully!", variant: "success" });
+    //     },
+    //     onError: (err: any) => {
+    //         const message = err?.response?.data?.message || "Something went wrong!";
+    //         toast({ title: "Error", description: message, variant: "destructive" });
+    //     },
+    // });
 
 
 
-    useEffect(() => {
-        // 1. Only sync if there's actually something to save and it's 'dirty'
-        if (rectangleLayers.length === 0 || !isDirty.current) return;
+    // useEffect(() => {
+    //     // 1. Only sync if there's actually something to save and it's 'dirty'
+    //     if (rectangleLayers.length === 0 || !isDirty.current) return;
 
-        // 2. Set a 3-second debounce timer
-        const timeoutId = setTimeout(() => {
-            console.log("Auto-syncing to Backend...");
-            mutate(rectangleLayers);
-        }, 3000); 
+    //     // 2. Set a 3-second debounce timer
+    //     const timeoutId = setTimeout(() => {
+    //         console.log("Auto-syncing to Backend...");
+    //         mutate(rectangleLayers);
+    //     }, 3000); 
 
-        // 3. Cleanup: This kills the previous timer if the user moves something 
-        // before the 3 seconds are up.
-        return () => clearTimeout(timeoutId);
-    }, [rectangleLayers, mutate]);
+    //     // 3. Cleanup: This kills the previous timer if the user moves something 
+    //     // before the 3 seconds are up.
+    //     return () => clearTimeout(timeoutId);
+    // }, [rectangleLayers, mutate]);
 
 
-    const handleManualSave = useCallback(() => {
-        // Check the ref inside the function, not in the JSX
-        if (isDirty.current && !isPending) {
-            console.log("Manual save triggered");
-            mutate(rectangleLayers);
-        } else {
-            console.log("Save skipped: not dirty or already pending");
-        }
-    }, [rectangleLayers, mutate, isPending]);
+    // const handleManualSave = useCallback(() => {
+    //     // Check the ref inside the function, not in the JSX
+    //     if (isDirty.current && !isPending) {
+    //         console.log("Manual save triggered");
+    //         mutate(rectangleLayers);
+    //     } else {
+    //         console.log("Save skipped: not dirty or already pending");
+    //     }
+    // }, [rectangleLayers, mutate, isPending]);
 
 
     return (
@@ -460,7 +494,7 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
             onPointerMove={onPointerMove} 
             onPointerUp={onPointerUp}
         >   
-            <Info id={id} title={title} onClick={handleManualSave} />
+            <Info id={id} title={title} onClick={() => {}} />
             <Members id={id} />
             <Toolbar 
                 canvasState={canvasState} 
@@ -471,6 +505,8 @@ export default function Canvas({ id, title }: { id: string, title: string }) {
                 canRedo={canRedo} 
                 lastUsedColor={lastUsedColor} 
                 onChangeColor={onChangeColor} 
+                deleteLayers={deleteLayers} 
+                canDelete={selection.length > 0}
             />
 
             <svg 

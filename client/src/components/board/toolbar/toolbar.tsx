@@ -9,7 +9,8 @@ import {
     Undo, 
     Redo, 
     StickyNote, 
-    Square 
+    Square, 
+    Trash2
 } from "lucide-react";
 
 import { ColorPicker } from "../color-picker"; // Adjust path as needed
@@ -25,6 +26,8 @@ interface ToolbarProps {
     canRedo: boolean;
     lastUsedColor: color;
     onChangeColor: (color: color) => void;
+    deleteLayers: () => void;
+    canDelete: boolean;
 };
 
 export default function Toolbar ({
@@ -36,6 +39,8 @@ export default function Toolbar ({
     canRedo,
     lastUsedColor,
     onChangeColor,
+    deleteLayers,
+    canDelete,
 }: ToolbarProps) {
     return (
         <div className="absolute top-[50%] -translate-y-[50%] left-2 flex flex-col gap-y-4">
@@ -93,6 +98,14 @@ export default function Toolbar ({
                     icon={Pencil}
                     isActive={canvasState.mode === CanvasMode.Pencil}
                     onClick={() => setCanvasState({ mode: CanvasMode.Pencil })}
+                />
+
+                {/* NEW DELETE BUTTON */}
+                <ToolButton 
+                    label="Delete"
+                    icon={Trash2}
+                    onClick={deleteLayers}
+                    isDisabled={!canDelete}
                 />
             </div>
 
