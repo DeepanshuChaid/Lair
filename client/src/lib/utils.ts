@@ -1,4 +1,4 @@
-import { color } from "@/types/canvas";
+import { color, Point, Side } from "@/types/canvas";
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -87,3 +87,28 @@ export function throttle(func: Function, limit: number) {
     }
   }
 }
+
+
+// Helper to calculate new bounds during resize
+export const resizeBounds = (bounds: any, corner: Side, point: Point) => {
+  const result = { ...bounds };
+
+  if ((corner & Side.Left) !== 0) {
+    result.x = Math.min(point.x, bounds.x + bounds.width);
+    result.width = Math.abs(bounds.x + bounds.width - point.x);
+  }
+  if ((corner & Side.Right) !== 0) {
+    result.x = Math.min(point.x, bounds.x);
+    result.width = Math.abs(point.x - bounds.x);
+  }
+  if ((corner & Side.Top) !== 0) {
+    result.y = Math.min(point.y, bounds.y + bounds.height);
+    result.height = Math.abs(bounds.y + bounds.height - point.y);
+  }
+  if ((corner & Side.Bottom) !== 0) {
+    result.y = Math.min(point.y, bounds.y);
+    result.height = Math.abs(point.y - bounds.y);
+  }
+
+  return result;
+};

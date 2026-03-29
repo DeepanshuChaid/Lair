@@ -18,7 +18,8 @@ const Cursor = memo(({ x, y, name, connectionId }: CursorProps) => {
         <foreignObject
             style={{
                 transform: `translateX(${x}px) translateY(${y}px)`,
-                transition: "transform 0.05s linear"
+                transition: "transform 0.05s linear",
+                userSelect: "none",
             }}
             height={50}
             width={name.length * 10 + 24}

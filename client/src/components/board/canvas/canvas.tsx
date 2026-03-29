@@ -18,6 +18,7 @@ import { Ellipse } from "../boardTools/ellipse";
 import { ColorToCss, throttle } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
+import { resizeBounds } from "@/lib/utils";
 import { Path } from "../boardTools/path";
 import API from "@/lib/axios";
 import { useMutation } from "@tanstack/react-query";
@@ -37,6 +38,9 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
     const [rectangleLayers, setRectangleLayers] = useState<Array<{ id: string; layer: any }>>([]);
     const [draftRectangleLayer, setDraftRectangleLayer] = useState<{ id: string; layer: any } | null>(null);
+
+    const translatingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>([]);
+    const resizingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>([]);
 
     // Key is ID, Value is { layer, status }
     
@@ -83,7 +87,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(
             JSON.stringify({
-                type: "LAYER_UPDATE",
+                type: "LAYER_UPDATE_DELTA",
                 content: layers,
             })
             );
@@ -108,6 +112,11 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
                 socket.onmessage = (event: MessageEvent) => {
                     const data = JSON.parse(event.data);
+
+                    // Ignore our own echo messages from the server (we already applied them locally)
+                    if (data.userId && user?.id && data.userId === user.id && data.type !== "CURSOR_MOVE") {
+                        return;
+                    }
 
                     // 1. Handle Initial State from Backend
                     if (data.type === "init_state") {
@@ -149,9 +158,34 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                         });
                     }
 
+                    if (data.type === "LAYER_TRANSFORM") {
+                        const transformed = data.content;
+                        setRectangleLayers((prev) => {
+                            return prev.map((item) => {
+                                const change = transformed.find((t: any) => t.layerId === item.id);
+                                if (!change) return item;
+                                return {
+                                    ...item,
+                                    layer: {
+                                        ...item.layer,
+                                        x: change.x,
+                                        y: change.y,
+                                        width: change.width,
+                                        height: change.height,
+                                    },
+                                };
+                            });
+                        });
+                    }
+
                     if (data.type === "LAYER_DELETE") {
                         const idsToDelete = data.content;
                         setRectangleLayers((prev) => prev.filter(l => !idsToDelete.includes(l.id)));
+                    }
+
+                    if (data.type === "LAYER_CREATE") {
+                        const newLayer = data.content;
+                        setRectangleLayers((prev) => [...prev, newLayer]);
                     }
 
                     // 2. Handle Real-time Cursors
@@ -176,7 +210,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             if (dirtyLayers.current.size > 0) {
                 const payload = JSON.stringify(Array.from(dirtyLayers.current.entries()));
                 // sendBeacon is asynchronous and doesn't block the UI/Close
-                navigator.sendBeacon(`/api/rooms/${id}/save-batch`, payload);
+                navigator.sendBeacon(`/api/rooms/save/${id}`, payload);
             }
         };
         window.addEventListener("beforeunload", handleBeforeUnload);
@@ -346,11 +380,11 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
     }, [canvasState, clientToWorld, lastUsedColor]);
 
     
-    // --- 1. The SVG Specific Handler ---
-    const onSvgPointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+        // --- 1. The SVG Specific Handler ---
+        const onSvgPointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         const coords = clientToWorld(e.clientX, e.clientY);
 
-        // --- PENCIL FINALIZATION ---
+         // --- PENCIL FINALIZATION ---
         if (canvasState.mode === CanvasMode.Pencil) {
             if (canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
                 const newId = `path-${rectIdCounterRef.current++}`;
@@ -363,19 +397,21 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                 
                 const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
                 setRectangleLayers(nextLayers);
-                saveState(JSON.stringify(nextLayers));
 
-                // SYNC TO DIRTY:
+                // BROADCAST CREATE
+                wsRef.current?.send(JSON.stringify({
+                    type: "LAYER_UPDATE_DELTA", // The receiver algo handles "push if not exists"
+                    content: [{ id: newId, layer: newLayer }],
+                }));
+
+                saveState(JSON.stringify(nextLayers));
                 onLayerChange(newId, newLayer); 
 
-                setCanvasState({
-                    mode: CanvasMode.Pencil,
-                    pencilPoints: []
-                })
+                setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
             }
         }
 
-        // --- SHAPE FINALIZATION ---
+        // --- SHAPE FINALIZATION (Rectangle, Ellipse, Note, Text) ---
         else if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
             const start = insertingStartRef.current;
             let width = Math.abs(coords.x - start.x);
@@ -393,9 +429,14 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             
             const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
             setRectangleLayers(nextLayers);
-            saveState(JSON.stringify(nextLayers));
 
-            // SYNC TO DIRTY:
+            // BROADCAST CREATE
+            wsRef.current?.send(JSON.stringify({
+                type: "LAYER_UPDATE_DELTA", 
+                content: [{ id: newId, layer: newLayer }],
+            }));
+
+            saveState(JSON.stringify(nextLayers));
             onLayerChange(newId, newLayer);
             
             insertingStartRef.current = null;
@@ -403,20 +444,14 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             setCanvasState({ mode: CanvasMode.None });
         }
         
-        // --- TRANSLATING / RESIZING FINALIZATION ---
+        // ... rest of your logic for Translating/Resizing
         else if (canvasState.mode === CanvasMode.Translating || canvasState.mode === CanvasMode.Resizing) {
             saveState(JSON.stringify(rectangleLayers));
             setCanvasState({ mode: CanvasMode.None });
         }
 
-        // --- SELECTION NET FINALIZATION ---
-        else {
-            setCanvasState({ mode: CanvasMode.None });
-        }
-
-        // Release pointer capture
         e.currentTarget.releasePointerCapture(e.pointerId);
-    }, [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState]);
+    }, [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState, onLayerChange]);
 
 
     
@@ -435,52 +470,111 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         if (canvasState.mode === CanvasMode.Inserting || canvasState.mode === CanvasMode.Pencil) return;
         e.stopPropagation();
         const coords = clientToWorld(e.clientX, e.clientY);
+
+        translatingBaseLayersRef.current = rectangleLayers.map((l) => ({ id: l.id, layer: { ...l.layer } }));
+
         setSelection(e.shiftKey ? (prev => prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]) : [layerId]);
         setCanvasState({ mode: CanvasMode.Translating, current: coords });
-    }, [canvasState.mode, clientToWorld]);
+    }, [canvasState.mode, clientToWorld, rectangleLayers]);
 
     const onPointerMove = useCallback((e: React.PointerEvent) => {
         const coords = clientToWorld(e.clientX, e.clientY);
-        if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
-            const offset = { x: coords.x - canvasState.current.x, y: coords.y - canvasState.current.y };
-            
-            // 1. Update local state for UI responsiveness
-            const updatedLayers = rectangleLayers.map((item) => 
-                selection.includes(item.id) 
-                    ? { ...item, layer: { ...item.layer, x: item.layer.x + offset.x, y: item.layer.y + offset.y } } 
-                    : item
-            );
-            setRectangleLayers(updatedLayers);
-            setCanvasState({ mode: CanvasMode.Translating, current: coords });
 
-            // 2. Broadcast ONLY the moved layers
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                const movedLayers = updatedLayers.filter(l => selection.includes(l.id));
+        // --- 1. TRANSLATING LOGIC ---
+        if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
+            const offset = { 
+                x: coords.x - canvasState.current.x, 
+                y: coords.y - canvasState.current.y 
+            };
+
+            setRectangleLayers((prev) => {
+                const next = prev.map((item) => 
+                    selection.includes(item.id) 
+                        ? { ...item, layer: { ...item.layer, x: item.layer.x + offset.x, y: item.layer.y + offset.y } } 
+                        : item
+                );
                 
-                wsRef.current.send(JSON.stringify({
-                    type: "LAYER_UPDATE_DELTA", // New specific type
-                    content: movedLayers // This is just an array of the 1 or 2 items moved
-                }));
+                const movedLayers = next.filter(l => selection.includes(l.id));
+                throttledLayerBroadcast(movedLayers); 
+                
+                return next;
+            });
+
+            setCanvasState(prev => ({ ...prev, current: coords }));
+        } 
+
+        // --- 2. RESIZING LOGIC (The Fixed Part) ---
+        else if (canvasState.mode === CanvasMode.Resizing && selection.length > 0) {
+            const { initialBounds, corner } = canvasState;
+            
+            // Calculate the target bounding box based on mouse position
+            let newX = initialBounds.x;
+            let newY = initialBounds.y;
+            let newWidth = initialBounds.width;
+            let newHeight = initialBounds.height;
+
+            if ((corner & Side.top) === Side.top) {
+                newY = Math.min(coords.y, initialBounds.y + initialBounds.height);
+                newHeight = Math.abs(initialBounds.y + initialBounds.height - coords.y);
             }
-        } else if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
-            const offset = { x: coords.x - canvasState.current.x, y: coords.y - canvasState.current.y };
-            setRectangleLayers((prev) => prev.map((item) => selection.includes(item.id) ? { ...item, layer: { ...item.layer, x: item.layer.x + offset.x, y: item.layer.y + offset.y } } : item));
-            setCanvasState({ mode: CanvasMode.Translating, current: coords });
+            if ((corner & Side.bottom) === Side.bottom) {
+                newHeight = Math.max(0, coords.y - initialBounds.y);
+            }
+            if ((corner & Side.left) === Side.left) {
+                newX = Math.min(coords.x, initialBounds.x + initialBounds.width);
+                newWidth = Math.abs(initialBounds.x + initialBounds.width - coords.x);
+            }
+            if ((corner & Side.right) === Side.right) {
+                newWidth = Math.max(0, coords.x - initialBounds.x);
+            }
+
+            // Calculate scale factors against the ORIGINAL bounds
+            const scaleX = initialBounds.width !== 0 ? newWidth / initialBounds.width : 1;
+            const scaleY = initialBounds.height !== 0 ? newHeight / initialBounds.height : 1;
+
+            const startLayers = resizingBaseLayersRef.current;
+
+            setRectangleLayers((prev) => {
+                const next = prev.map((item) => {
+                    if (!selection.includes(item.id)) return item;
+                    
+                    const startItem = startLayers.find((l: any) => l.id === item.id);
+                    if (!startItem) return item;
+
+                    return {
+                        ...item,
+                        layer: {
+                            ...item.layer,
+                            x: newX + (startItem.layer.x - initialBounds.x) * scaleX,
+                            y: newY + (startItem.layer.y - initialBounds.y) * scaleY,
+                            width: startItem.layer.width * scaleX,
+                            height: startItem.layer.height * scaleY,
+                        }
+                    };
+                });
+
+                // Broadcast the resized layers
+                const resizedLayers = next.filter(l => selection.includes(l.id));
+                throttledLayerBroadcast(resizedLayers);
+
+                return next;
+            });
         }
 
+        // --- 3. CURSOR BROADCAST ---
         const now = Date.now();
         if (now - lastSentRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
             lastSentRef.current = now;
             wsRef.current.send(JSON.stringify({ 
                 type: "CURSOR_MOVE", 
                 content: { 
-                    x: coords.x, // Use world X
-                    y: coords.y, // Use world Y
+                    x: coords.x, 
+                    y: coords.y, 
                     name: user?.name || "Anonymous" 
                 } 
             }));
         }
-        }, [canvasState, selection, clientToWorld, user?.name]);
+    }, [canvasState, selection, clientToWorld, user?.name, currentState, throttledLayerBroadcast]);
 
     const onPointerUp = useCallback(() => {
         if (canvasState.mode === CanvasMode.None) return;
@@ -499,18 +593,20 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                 }
             });
 
+            const transformPayload = rectangleLayers
+                .filter((l) => selection.includes(l.id))
+                .map((l) => ({
+                    id: l.id,
+                    layer: l.layer,
+                }));
+
             wsRef.current?.send(JSON.stringify({
-                type: "LAYER_TRANSFORM",
-                content: rectangleLayers.filter((l) => selection.includes(l.id)).map((l) => ({
-                    layerId: l.id,
-                    x: l.layer.x,
-                    y: l.layer.y,
-                    width: l.layer.width,
-                    height: l.layer.height
-                }))
+                type: "LAYER_UPDATE_DELTA",
+                content: transformPayload,
             }));
 
-
+            translatingBaseLayersRef.current = [];
+            resizingBaseLayersRef.current = [];
         }
 
         // Reset UI state but keep the tool selected if it's Pencil or Inserting
@@ -523,16 +619,27 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
     }, [canvasState.mode, rectangleLayers, saveState, selection, dirtyLayers]);
 
     const handleValueChange = useCallback((layerId: string, newValue: string) => {
+        let updatedLayerObj: any = null;
+
         const nextLayers = rectangleLayers.map((l) => {
             if (l.id === layerId) {
-                const updated = { ...l, layer: { ...l.layer, value: newValue } };
-                // Sync to dirtyLayers immediately on text change
-                dirtyLayers.current.set(layerId, { layer: updated.layer, status: 'update' });
-                return updated;
+                updatedLayerObj = { ...l, layer: { ...l.layer, value: newValue } };
+                return updatedLayerObj;
             }
             return l;
         });
+
         setRectangleLayers(nextLayers);
+
+        // BROADCAST TEXT UPDATE
+        if (updatedLayerObj && wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: "LAYER_UPDATE_DELTA",
+                content: [updatedLayerObj]
+            }));
+        }
+
+        dirtyLayers.current.set(layerId, { layer: updatedLayerObj.layer, status: 'update' });
         saveState(JSON.stringify(nextLayers));
     }, [rectangleLayers, saveState, dirtyLayers]);
 
@@ -545,6 +652,10 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                 if (selection.includes(item.id)) {
                     const updatedLayer = { ...item.layer, fill };
                     dirtyLayers.current.set(item.id, { layer: updatedLayer, status: 'update' });
+                    wsRef.current?.send(JSON.stringify({
+                        type: "LAYER_UPDATE_DELTA",
+                        content: [{ id: item.id, layer: updatedLayer }]
+                    }))
                     return { ...item, layer: updatedLayer };
                 }
                 return item;
@@ -699,13 +810,14 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
                     <SelectionBox 
                         bounds={selectionBounds} 
-                        onResizeHandlePointerDown={(corner, bounds) => 
-                            setCanvasState({ 
-                                mode: CanvasMode.Resizing, 
-                                initialBounds: bounds, 
-                                corner 
-                            })
-                        }
+                        onResizeHandlePointerDown={(corner, bounds) => {
+                            resizingBaseLayersRef.current = rectangleLayers.map((l) => ({ id: l.id, layer: { ...l.layer } }));
+                            setCanvasState({
+                                mode: CanvasMode.Resizing,
+                                initialBounds: bounds, // This MUST be selectionBounds
+                                corner,
+                            });
+                        }}
                         isShowingHandles={selection.length === 1} 
                     />
 
