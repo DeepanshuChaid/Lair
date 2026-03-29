@@ -771,7 +771,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                                 <Component
                                     key={layerId}
                                     id={layerId}
-                                    layer={layer as any}
+                                    layer={layer}
                                     onPointerDown={onLayerPointerDown}
                                     selectionColor={selectionColor}
                                     onValueChange={(val) => handleValueChange(layerId, val)} // Using the fixed handler

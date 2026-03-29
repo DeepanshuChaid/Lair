@@ -16,7 +16,7 @@ interface NoteProps {
     layer: NoteLayer;
     onPointerDown: (e: React.PointerEvent, id: string) => void;
     selectionColor?: string;
-    onValueChange: (value: string) => void; // Keep this for your custom socket logic
+    onValueChange: (value: string) => void;
 }
 
 const calculateFontSize = (width: number, height: number) => {
