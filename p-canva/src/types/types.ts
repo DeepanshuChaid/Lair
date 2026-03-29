@@ -1,33 +1,33 @@
 // this refers to the state of the canvas which prevents unexpected states
 export type CanvasState = {
-    mode: CavnasMode.None;
+    mode: CanvasMode.None;
 } | {
-    mode: CavnasMode.Pressing;
+    mode: CanvasMode.Pressing;
     origin: Point;
 } | {
-    mode: CavnasMode.Inserting
+    mode: CanvasMode.Inserting
     layerType: LayerType;
 } | {
-    mode: CavnasMode.SelectionNet;
+    mode: CanvasMode.SelectionNet;
     origin: Point;
     current?: Point;
 } | {
-    mode: CavnasMode.Translating
+    mode: CanvasMode.Translating
     current: Point;
 } | {
-    mode: CavnasMode.Resizing;
+    mode: CanvasMode.Resizing;
     initialBounds: XYMH
     corner: Side
 } | {
-    mode: CavnasMode.Translating;
+    mode: CanvasMode.Translating;
     current: Point;
 } | {
-    mode: CavnasMode.Pencil;
+    mode: CanvasMode.Pencil;
     pencilPoints?: number[][];
 }
 
 // enums are used instead of raw string as we would not get error like we would with strings
-export enum CavnasMode {
+export enum CanvasMode {
     None,
     Pressing,
     Inserting,
