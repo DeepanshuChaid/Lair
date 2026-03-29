@@ -656,6 +656,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                         type: "LAYER_UPDATE_DELTA",
                         content: [{ id: item.id, layer: updatedLayer }]
                     }))
+                    
                     return { ...item, layer: updatedLayer };
                 }
                 return item;
