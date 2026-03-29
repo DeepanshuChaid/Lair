@@ -97,25 +97,38 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                         }
                     }
 
+                    // Inside the setup useEffect socket.onmessage:
                     if (data.type === "LAYER_UPDATE") {
-                        console.log(data)
-                        const layer = data.content;
-                        const id = data.id
-                        setRectangleLayers(data.content)
+                        const remoteLayers = data.content;
+                        
+                        // 1. Update the local state
+                        setRectangleLayers(remoteLayers);
+                        
+                        // 2. IMPORTANT: Update the ID counter so your next local 'insert' 
+                        // doesn't use an ID that someone else just created.
+                        const maxId = remoteLayers.reduce((max: number, l: any) => {
+                            const num = parseInt(l.id.replace(/^\D+/g, ''));
+                            return isNaN(num) ? max : Math.max(max, num);
+                        }, 0);
+                        rectIdCounterRef.current = Math.max(rectIdCounterRef.current, maxId + 1);
+
+                        // 3. Optional: Sync history if you want remote changes to be undoable 
+                        // (Be careful: this can make 'undo' feel weird if others are drawing)
+                        // saveState(JSON.stringify(remoteLayers));
                     }
-//                     {
-//     "fill": {
-//         "b": 42,
-//         "g": 142,
-//         "r": 252
-//     },
-//     "height": 213.60000610351562,
-//     "type": "Rectangle",
-//     "value": "",
-//     "width": 162.40000915527344,
-//     "x": 236.97776794433594,
-//     "y": 243.75558471679688
-// }
+                    //                     {
+                    //     "fill": {
+                    //         "b": 42,
+                    //         "g": 142,
+                    //         "r": 252
+                    //     },
+                    //     "height": 213.60000610351562,
+                    //     "type": "Rectangle",
+                    //     "value": "",
+                    //     "width": 162.40000915527344,
+                    //     "x": 236.97776794433594,
+                    //     "y": 243.75558471679688
+                    // }
 
                     // 2. Handle Real-time Cursors
                     if (data.type === "CURSOR_MOVE") {
@@ -139,7 +152,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             if (dirtyLayers.current.size > 0) {
                 const payload = JSON.stringify(Array.from(dirtyLayers.current.entries()));
                 // sendBeacon is asynchronous and doesn't block the UI/Close
-                navigator.sendBeacon(`/api/rooms/${id}/save-batch`, payload);
+                navigator.sendBeacon(`/api/rooms/save/${id}`, payload);
             }
         };
         window.addEventListener("beforeunload", handleBeforeUnload);
@@ -319,9 +332,14 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     points: canvasState.pencilPoints,
                 };
                 
+                // At the end of the shape/pencil finalization blocks in onSvgPointerUp
                 const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
                 setRectangleLayers(nextLayers);
                 saveState(JSON.stringify(nextLayers));
+                onLayerChange(newId, newLayer);
+
+                // BROADCAST NEW LAYER
+                wsRef.current?.send(JSON.stringify({ type: "LAYER_UPDATE", content: nextLayers }));
 
                 // SYNC TO DIRTY:
                 onLayerChange(newId, newLayer); 
@@ -439,12 +457,26 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                         layer: item.layer, 
                         status: 'update' 
                     });
-                    // +++++++++++++++++++++++++++++++++++++++++ //
-                    // WRITTEN BY ME MYSELF ===================== //
-                    // +++++++++++++++++++++++++++++++++++++++++ //
-                    wsRef?.current?.send(JSON.stringify({type: "LAYER_UPDATE", content: rectangleLayers}))
                 }
             });
+
+            selection.forEach((id) => {
+                const item = rectangleLayers.find(l => l.id === id);
+                if (item) {
+                    dirtyLayers.current.set(id, { 
+                        layer: item.layer, 
+                        status: 'update' 
+                    });
+                }
+            });
+
+            // Broadcast the updated state to others
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: "LAYER_UPDATE", 
+                    content: rectangleLayers 
+                }));
+            }
         }
 
         // Reset UI state but keep the tool selected if it's Pencil or Inserting
