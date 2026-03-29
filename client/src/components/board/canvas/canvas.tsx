@@ -126,6 +126,15 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                         }
                     }
 
+                    if (data.type === "LAYER_TRANSFORM") {
+                        setRectangleLayers((prev) => 
+                            prev.map(l => l.id === data.layerId 
+                                ? { ...l, layer: { ...l.layer, x: data.x, y: data.y, width: data.width, height: data.height }} 
+                                : l
+                            )
+                        );
+                    }
+
                     // 2. Handle Real-time Cursors
                     if (data.type === "CURSOR_MOVE") {
                         setOtherCursors((prev) => ({
@@ -410,7 +419,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         const coords = clientToWorld(e.clientX, e.clientY);
         if (canvasState.mode === CanvasMode.Resizing && selection.length === 1) {
             const { initialBounds, corner } = canvasState;
-            setRectangleLayers((prev) => prev.map((item) => {
+            const updatedLayers = rectangleLayers.map((item) => {
                 if (item.id === selection[0]) {
                     let { x, y, width, height } = initialBounds;
                     if ((corner & Side.top) === Side.top) { y = Math.min(coords.y, initialBounds.y + initialBounds.height); height = Math.abs(initialBounds.y + initialBounds.height - coords.y); }
@@ -420,7 +429,9 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     return { ...item, layer: { ...item.layer, x, y, width, height } };
                 }
                 return item;
-            }));
+            })
+            setRectangleLayers(updatedLayers);
+
         } else if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
             const offset = { x: coords.x - canvasState.current.x, y: coords.y - canvasState.current.y };
             setRectangleLayers((prev) => prev.map((item) => selection.includes(item.id) ? { ...item, layer: { ...item.layer, x: item.layer.x + offset.x, y: item.layer.y + offset.y } } : item));
@@ -430,9 +441,16 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         const now = Date.now();
         if (now - lastSentRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
             lastSentRef.current = now;
-            wsRef.current.send(JSON.stringify({ type: "CURSOR_MOVE", content: { x: Math.round(e.clientX), y: Math.round(e.clientY), name: user?.name || "Anonymous" } }));
+            wsRef.current.send(JSON.stringify({ 
+                type: "CURSOR_MOVE", 
+                content: { 
+                    x: coords.x, // Use world X
+                    y: coords.y, // Use world Y
+                    name: user?.name || "Anonymous" 
+                } 
+            }));
         }
-    }, [canvasState, selection, clientToWorld, user?.name]);
+        }, [canvasState, selection, clientToWorld, user?.name]);
 
     const onPointerUp = useCallback(() => {
         if (canvasState.mode === CanvasMode.None) return;
@@ -450,6 +468,19 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     });
                 }
             });
+
+            wsRef.current?.send(JSON.stringify({
+                type: "LAYER_TRANSFORM",
+                content: rectangleLayers.filter((l) => selection.includes(l.id)).map((l) => ({
+                    layerId: l.id,
+                    x: l.layer.x,
+                    y: l.layer.y,
+                    width: l.layer.width,
+                    height: l.layer.height
+                }))
+            }));
+
+
         }
 
         // Reset UI state but keep the tool selected if it's Pencil or Inserting
