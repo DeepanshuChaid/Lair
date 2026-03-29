@@ -18,10 +18,7 @@ import { Ellipse } from "../boardTools/ellipse";
 import { ColorToCss, throttle } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
-import { resizeBounds } from "@/lib/utils";
 import { Path } from "../boardTools/path";
-import API from "@/lib/axios";
-import { useMutation } from "@tanstack/react-query";
 
 export default function Canvas({ id, title, dirtyLayers, save }: { id: string, title: string, dirtyLayers: React.MutableRefObject<Map<string, { layer: any, status: 'update' | 'delete' | 'create' }>>, save: () => void }) {
     const [canvasState, setCanvasState] = useState<CanvasState>({ mode: CanvasMode.None });
@@ -656,7 +653,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                         type: "LAYER_UPDATE_DELTA",
                         content: [{ id: item.id, layer: updatedLayer }]
                     }))
-                    
+
                     return { ...item, layer: updatedLayer };
                 }
                 return item;
