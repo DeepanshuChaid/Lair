@@ -36,7 +36,6 @@ export type CanvasState =
         pencilPoints?: number[][]; // Add this!
     }
 
-;
 
 export enum CanvasMode {
     None,
