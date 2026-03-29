@@ -76,3 +76,14 @@ export function getContrastingTextColor(color: { r: number; g: number; b: number
     const yiq = (color.r * 299 + color.g * 587 + color.b * 114) / 1000;
     return yiq >= 128 ? "black" : "white";
 }
+
+export function throttle(func: Function, limit: number) {
+  let inThrottle: boolean;
+  return function(this: any, ...args: any[]) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  }
+}
