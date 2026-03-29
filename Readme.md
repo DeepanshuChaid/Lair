@@ -47,10 +47,3 @@ Instead of saving to a database 60 times a second (which would crash most system
 ```bash
 cd server
 go run cmd/main.go
-
----
-
-### Frontend (Nextjs)
-```bash
-cd client
-npm run dev
