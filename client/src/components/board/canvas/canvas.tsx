@@ -59,6 +59,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         dirtyLayers.current.set(id, { layer: null, status: 'delete' });
     }, [dirtyLayers])
 
+
     // 1. Throttled Cursor Broadcast (50ms is standard for smooth cursors)
     const throttledCursorMove = useMemo(
     () =>
@@ -126,13 +127,31 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                         }
                     }
 
-                    if (data.type === "LAYER_TRANSFORM") {
-                        setRectangleLayers((prev) => 
-                            prev.map(l => l.id === data.layerId 
-                                ? { ...l, layer: { ...l.layer, x: data.x, y: data.y, width: data.width, height: data.height }} 
-                                : l
-                            )
-                        );
+                    if (data.type === "LAYER_UPDATE_DELTA") {
+                        const deltaLayers = data.content; // Array of changed layers
+
+                        setRectangleLayers((prev) => {
+                            const next = [...prev];
+                            
+                            deltaLayers.forEach((incomingLayer: any) => {
+                                const index = next.findIndex(l => l.id === incomingLayer.id);
+                                
+                                if (index !== -1) {
+                                    // 1. Update existing layer
+                                    next[index] = incomingLayer;
+                                } else {
+                                    // 2. It's a new layer created by someone else
+                                    next.push(incomingLayer);
+                                }
+                            });
+                            
+                            return next;
+                        });
+                    }
+
+                    if (data.type === "LAYER_DELETE") {
+                        const idsToDelete = data.content;
+                        setRectangleLayers((prev) => prev.filter(l => !idsToDelete.includes(l.id)));
                     }
 
                     // 2. Handle Real-time Cursors
@@ -199,6 +218,11 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         const nextLayers = rectangleLayers.filter(
             (layer) => !selection.includes(layer.id)
         );
+
+        wsRef.current?.send(JSON.stringify({
+            type: "LAYER_DELETE",
+            content: selection,
+        }));
 
         setRectangleLayers(nextLayers);
         saveState(JSON.stringify(nextLayers));
@@ -417,21 +441,27 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
     const onPointerMove = useCallback((e: React.PointerEvent) => {
         const coords = clientToWorld(e.clientX, e.clientY);
-        if (canvasState.mode === CanvasMode.Resizing && selection.length === 1) {
-            const { initialBounds, corner } = canvasState;
-            const updatedLayers = rectangleLayers.map((item) => {
-                if (item.id === selection[0]) {
-                    let { x, y, width, height } = initialBounds;
-                    if ((corner & Side.top) === Side.top) { y = Math.min(coords.y, initialBounds.y + initialBounds.height); height = Math.abs(initialBounds.y + initialBounds.height - coords.y); }
-                    if ((corner & Side.bottom) === Side.bottom) { y = Math.min(coords.y, initialBounds.y); height = Math.abs(coords.y - initialBounds.y); }
-                    if ((corner & Side.left) === Side.left) { x = Math.min(coords.x, initialBounds.x + initialBounds.width); width = Math.abs(initialBounds.x + initialBounds.width - coords.x); }
-                    if ((corner & Side.right) === Side.right) { x = Math.min(coords.x, initialBounds.x); width = Math.abs(coords.x - initialBounds.x); }
-                    return { ...item, layer: { ...item.layer, x, y, width, height } };
-                }
-                return item;
-            })
+        if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
+            const offset = { x: coords.x - canvasState.current.x, y: coords.y - canvasState.current.y };
+            
+            // 1. Update local state for UI responsiveness
+            const updatedLayers = rectangleLayers.map((item) => 
+                selection.includes(item.id) 
+                    ? { ...item, layer: { ...item.layer, x: item.layer.x + offset.x, y: item.layer.y + offset.y } } 
+                    : item
+            );
             setRectangleLayers(updatedLayers);
+            setCanvasState({ mode: CanvasMode.Translating, current: coords });
 
+            // 2. Broadcast ONLY the moved layers
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                const movedLayers = updatedLayers.filter(l => selection.includes(l.id));
+                
+                wsRef.current.send(JSON.stringify({
+                    type: "LAYER_UPDATE_DELTA", // New specific type
+                    content: movedLayers // This is just an array of the 1 or 2 items moved
+                }));
+            }
         } else if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
             const offset = { x: coords.x - canvasState.current.x, y: coords.y - canvasState.current.y };
             setRectangleLayers((prev) => prev.map((item) => selection.includes(item.id) ? { ...item, layer: { ...item.layer, x: item.layer.x + offset.x, y: item.layer.y + offset.y } } : item));
