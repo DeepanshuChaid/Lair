@@ -49,24 +49,6 @@ export default function Board() {
 
   const resizingBaselayersRef = useRef<Array<{ id: string; layer: any }>>([]);
 
-  const selectionsBounds = useMemo(() => {
-    const selectedLayers = layers.filter((l) => selection.includes(l.id));
-    if (selectedLayers.length === 0) return null;
-
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-
-    selectedLayers.forEach(({ layer }) => {
-      minX = Math.min(minX, layer.x);
-      minY = Math.min(minY, layer.y);
-      maxX = Math.max(maxX, layer.x + layer.width);
-      maxY = Math.max(maxY, layer.y + layer.height);
-    });
-    return { minX, minY, maxX, maxY };
-  }, [selection]);
-
   // ZOOM LOGIC
   const onWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
@@ -132,51 +114,37 @@ export default function Board() {
   // Use refs to store mutable values that don't trigger re-renders
   const startPointRef = useRef<Point | null>(null);
 
-
-  const onPointerUp = useCallback(() => {
-    if (canvasState.mode === CanvasMode.None) return;
-
-    if (canvasState.mode === CanvasMode.Translating || canvasState.mode === CanvasMode.Resizing) {
-      
-      const transformPayload = layers.filter((l) => selection.includes(l.id))
-      .map((l) => ({
-        id: l.id,
-        layer: l.layer,
-      }))
-
-
-
-    }
-  }, []);
+  const onPointerUp = useCallback(() => {}, []);
 
   const onPointerMove = useCallback(
     (e: any) => {
       const coords = clientToWorld(e.clientX, e.clientY);
 
       if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
+        // Inside onPointerMove, for CanvasMode.Translating:
         const offset = {
           x: coords.x - canvasState.current.x,
           y: coords.y - canvasState.current.y,
         };
 
-        setLayer((prev) => {
-          const next = prev.map((item) => {
-            selection.includes(item.id)
-              ? {
-                  ...item,
-                  layer: {
-                    ...item.layer,
-                    x: item.layer.x + offset.x,
-                    y: item.layer.y + offset.y,
-                  },
-                }
-              : item;
-          });
-          const movedLayers = next.filter((l) => selection.includes(l.id))
-          return next;
-        });
+        setLayer((prev) => prev.map((item) => {
+          if (selection.includes(item.id)) {
+            return {
+              ...item,
+              layer: {
+                ...item.layer,
+                x: item.layer.x + offset.x,
+                y: item.layer.y + offset.y,
+              },
+            };
+          }
+          return item;
+        }));
 
+        // CRITICAL: Update the 'current' point to the new coords 
+        // so the next frame's offset is calculated from here
         setCanvasState((prev) => ({ ...prev, current: coords }));
+
       } else if (
         canvasState.mode === CanvasMode.Resizing &&
         selection.length > 0
@@ -205,21 +173,21 @@ export default function Board() {
           newWidth = Math.max(0, coords.x - initialBounds.x);
         }
 
-        const scaleX = initialBounds.width !== 0 ? newWidth / initialBounds.width : 1;
-        const scaleY = initialBounds.height !== 0 ? newHeight / initialBounds.height : 1;
+        const scaleX =
+          initialBounds.width !== 0 ? newWidth / initialBounds.width : 1;
+        const scaleY =
+          initialBounds.height !== 0 ? newHeight / initialBounds.height : 1;
 
+        // Inside onPointerMove, for CanvasMode.Resizing:
         const startLayers = resizingBaselayersRef.current;
 
         setLayer((prev) => {
           const next = prev.map((item) => {
-            if (selection.includes(item.id)) return
-            
-            const startItem = startLayers.find((l: any) => l.id === item.id)
-
-            if (!startItem) return item;
+            const startItem = startLayers.find((l) => l.id === item.id);
+            if (!startItem || !selection.includes(item.id)) return item;
 
             return {
-              ...item, 
+              ...item,
               layer: {
                 ...item.layer,
                 x: newX + (startItem.layer.x - initialBounds.x) * scaleX,
@@ -227,13 +195,11 @@ export default function Board() {
                 width: startItem.layer.width * scaleX,
                 height: startItem.layer.height * scaleY,
               }
-            }
-          })
-
-          const resizedLayers = next.filter((l) => selection.includes(l.id))
-          
+            };
+          });
           return next;
-        })
+        });
+
       }
     },
     [clientToWorld],
@@ -287,7 +253,9 @@ export default function Board() {
             fill: lastUsedColor,
           } as Layer,
         });
-      }
+      } 
+
+
     },
     [lastUsedColor, canvasState, clientToWorld],
   );
@@ -339,29 +307,46 @@ export default function Board() {
     [canvasState, clientToWorld, lastUsedColor],
   );
 
-// if we are click on any layer set translating mode and pass the id
-  const onPointerDown = useCallback(
-    (id: string, e: React.PointerEvent) => {
-      e.stopPropagation();
-      const coords = clientToWorld(e.clientX, e.clientY);
-      
+  const onPointerDown = useCallback((e: any, layerId: string) => {
+    e.stopPropagation();
 
-      if (canvasState.mode === CanvasMode.None) {
-        setSelection(prev => [...prev, id]);
-        setCanvasState({
-          mode: CanvasMode.Translating,
-          current: coords,
-        });
+    const coords = clientToWorld(e.clientX, e.clientY);
+
+    if (canvasState.mode === CanvasMode.None) {
+      if (!selection.includes(layerId)) {
+        setSelection([layerId]);
       }
-    },
-    [clientToWorld]
-  );
+      setCanvasState({ mode: CanvasMode.Translating, current: coords });
+    }
+  }, [selection, clientToWorld, layers, canvasState]);
+
+
+  // Selection bound
+  const selectionsBounds = useMemo(() => {
+    const selectedLayers = layers.filter((l) => selection.includes(l.id));
+    if (selectedLayers.length === 0) return null;
+
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+
+    selectedLayers.forEach(({ layer }) => {
+      minX = Math.min(minX, layer.x);
+      minY = Math.min(minY, layer.y);
+      maxX = Math.max(maxX, layer.x + layer.width);
+      maxY = Math.max(maxY, layer.y + layer.height);
+    });
+
+    return { x: minX, y: minY, width: maxX, height: maxY };
+  }, [selection]);
 
   return (
-    <div 
+    <div
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      className="h-screen w-full relative overflow-hidden bg-amber-100">
+      className="h-screen w-full relative overflow-hidden bg-amber-100"
+    >
       <Toolbar canvasState={canvasState} setCanvasState={setCanvasState} />
 
       <svg
@@ -384,7 +369,7 @@ export default function Board() {
                 id={draftLayer.id}
                 key={draftLayer.id}
                 layer={draftLayer.layer}
-                onPointerDown={() => {}}
+                onPointerDown={(e) => {}}
               />
             ) : draftLayer.layer.type === LayerType.Ellipse ? (
               <Ellipse
@@ -413,7 +398,7 @@ export default function Board() {
                   key={layerId}
                   id={layerId}
                   layer={layer}
-                  onPointerDown={(e) => onPointerDown(layerId, e)}
+                  onPointerDown={(e) => onPointerDown(e, layerId)}
                   selectionColor={selectionColor}
                 />
               );
@@ -425,7 +410,7 @@ export default function Board() {
                   key={layerId}
                   id={layerId}
                   layer={layer}
-                  onPointerDown={(e) => onPointerDown(layerId, e)}
+                  onPointerDown={(e) => onPointerDown(e, layerId)}
                   selectionColor={selectionColor}
                 />
               );
@@ -441,7 +426,7 @@ export default function Board() {
                   key={layerId}
                   id={layerId}
                   layer={layer}
-                  onPointerDown={(e) => onPointerDown(layerId, e)}
+                  onPointerDown={(e) => onPointerDown(e, layerId)}
                   selectionColor={selectionColor}
                   onValueChange={(value) => {
                     handleValueChange(layerId, value);
@@ -451,7 +436,21 @@ export default function Board() {
             }
           })}
 
-          <SelectionBox bounds={selectionsBounds} />
+          <SelectionBox
+            bounds={selectionsBounds}
+            onResizeHandlerPointerDown={(corner, bounds) => {
+              // 1. Capture the current state of all layers to use as a baseline
+              resizingBaselayersRef.current = [...layers];
+
+              // 2. Set the state to Resizing mode
+              setCanvasState({
+                mode: CanvasMode.Resizing,
+                initialBounds: bounds!,
+                corner,
+              });
+            }}
+            isShowingHandles={selection.length === 1}
+          />
         </g>
       </svg>
     </div>
