@@ -215,9 +215,7 @@ export default function Board () {
                 key={draftLayer.id}
                 layer={draftLayer.layer}
                 onPointerDown={() => {}}
-                onValueChange={(value) => {
-                  // Handle value change for note layer
-                }}
+                onValueChange={() => {}}
               />
             ) : null
           )}
@@ -259,13 +257,15 @@ export default function Board () {
                   onPointerDown={onPointerDown}
                   selectionColor={selectionColor}
                   onValueChange={(value) => {
-                    // Handle value change for note layer
                     handleValueChange(layerId, value)
                   }}
                 />
               )
             }
         })}
+
+
+          <SelectionBox /> 
          </g>
         </svg>
       </div>
