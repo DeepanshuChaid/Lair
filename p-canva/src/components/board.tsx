@@ -43,6 +43,11 @@ export default function Board() {
     b: 42,
   });
 
+  const [selection, setSelection] = useState<string[]>([])
+  const resizingBaseLayersRef = useRef<{id: string, layer: any} | null>(null)
+
+  
+
   const svgRef = useRef<SVGSVGElement>(null);
   const startPointRef = useRef<Point | null>(null);
 
