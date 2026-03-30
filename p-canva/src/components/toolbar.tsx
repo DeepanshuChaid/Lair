@@ -20,6 +20,11 @@ export default function ToolBar ({canvasState, setCanvasState}: {canvasState: Ca
             }}>
                 Ellipse
             </button>
+            <button className={`p-4 bg-amber-300 ${canvasState.mode === CanvasMode.Inserting && canvasState.layerType === LayerType.Note ? 'ring-2 ring-blue-500' : ''}`} onClick={() => {
+                setCanvasState({mode: CanvasMode.Inserting, layerType: LayerType.Note})
+            }}>
+                Note
+            </button>
         </div>
     )
 }

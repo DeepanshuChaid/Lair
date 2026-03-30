@@ -6,6 +6,8 @@ import Toolbar from "@/components/toolbar";
 import { CanvasState, CanvasMode, Layer, LayerType, Point, RectangleLayer, Color } from "@/types/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Ellipse from "@/canvasLayers/ellipse";
+import Note from "@/canvasLayers/note";
+import { Text } from "@/canvasLayers/text";
 
 export default function Board () {
     const [canvasState, setCanvasState] = useState<CanvasState>({mode: CanvasMode.Inserting, layerType: LayerType.Rectangle})
@@ -65,6 +67,22 @@ export default function Board () {
             y: (clientY - bounds.top - camera.y) / camera.scale
         };
     }, [camera])
+
+    const handleValueChange = useCallback((id: string, value: string) => {
+      setLayer((prevLayers) => 
+        prevLayers.map((layerObj) => {
+          if (layerObj.id === id) {
+            // Return the new object directly inside the map
+            return {
+              ...layerObj, 
+              layer: { ...layerObj.layer, value }
+            };
+          }
+          // Return the original if no match
+          return layerObj;
+        })
+      );
+    }, [])
 
     // Use refs to store mutable values that don't trigger re-renders
     const startPointRef = useRef<Point | null>(null);
@@ -166,7 +184,6 @@ export default function Board () {
         <div className="h-screen w-full relative overflow-hidden bg-amber-100">
           <Toolbar canvasState={canvasState} setCanvasState={setCanvasState} />
 
-
         <svg 
           className="top-0 left-0 w-full h-full" 
           ref={svgRef}
@@ -191,6 +208,16 @@ export default function Board () {
                 key={draftLayer.id}
                 layer={draftLayer.layer}
                 onPointerDown={() => {}}
+              />
+            ) : draftLayer.layer.type === LayerType.Note ? (
+              <Note
+                id={draftLayer.id}
+                key={draftLayer.id}
+                layer={draftLayer.layer}
+                onPointerDown={() => {}}
+                onValueChange={(value) => {
+                  // Handle value change for note layer
+                }}
               />
             ) : null
           )}
@@ -218,6 +245,23 @@ export default function Board () {
                   layer={layer}
                   onPointerDown={onPointerDown}
                   selectionColor={selectionColor}
+                />
+              )
+            }
+
+            if (layer.type === LayerType.Note || layer.type === LayerType.Text) {
+              const Components = layer.type === LayerType.Note ? Note : Text;
+              return (
+                <Components
+                  key={layerId}
+                  id={layerId}
+                  layer={layer}
+                  onPointerDown={onPointerDown}
+                  selectionColor={selectionColor}
+                  onValueChange={(value) => {
+                    // Handle value change for note layer
+                    handleValueChange(layerId, value)
+                  }}
                 />
               )
             }
