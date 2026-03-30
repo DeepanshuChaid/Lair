@@ -39,8 +39,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
     const translatingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>([]);
     const resizingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>([]);
 
-    // Key is ID, Value is { layer, status }
-    
+    // Key is ID
     const [selection, setSelection] = useState<string[]>([]);
     
     const svgRef = useRef<SVGSVGElement | null>(null);
@@ -378,77 +377,77 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
     
         // --- 1. The SVG Specific Handler ---
-        const onSvgPointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-            const coords = clientToWorld(e.clientX, e.clientY);
+    const onSvgPointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+        const coords = clientToWorld(e.clientX, e.clientY);
 
-            // --- PENCIL FINALIZATION ---
-            if (canvasState.mode === CanvasMode.Pencil) {
-                if (canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
-                    const newId = `path-${rectIdCounterRef.current++}`;
-                    const newLayer = {
-                        type: layerType.Path,
-                        x: 0, y: 0, width: 0, height: 0,
-                        fill: lastUsedColor,
-                        points: canvasState.pencilPoints,
-                    };
-                    
-                    const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
-                    setRectangleLayers(nextLayers);
-
-                    // BROADCAST CREATE
-                    wsRef.current?.send(JSON.stringify({
-                        type: "LAYER_UPDATE_DELTA", // The receiver algo handles "push if not exists"
-                        content: [{ id: newId, layer: newLayer }],
-                    }));
-
-                    saveState(JSON.stringify(nextLayers));
-                    onLayerChange(newId, newLayer); 
-
-                    setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
-                }
-            }
-
-            // --- SHAPE FINALIZATION (Rectangle, Ellipse, Note, Text) ---
-            else if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
-                const start = insertingStartRef.current;
-                let width = Math.abs(coords.x - start.x);
-                let height = Math.abs(coords.y - start.y);
-                let x = Math.min(start.x, coords.x);
-                let y = Math.min(start.y, coords.y);
-
-                if (width < 5 && height < 5) {
-                    width = 100; height = 100;
-                    x = start.x - 50; y = start.y - 50;
-                }
-
-                const newId = `layer-${rectIdCounterRef.current++}`;
-                const newLayer = { type: canvasState.layerType, x, y, width, height, fill: lastUsedColor, value: "" };
+        // --- PENCIL FINALIZATION ---
+        if (canvasState.mode === CanvasMode.Pencil) {
+            if (canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
+                const newId = `path-${rectIdCounterRef.current++}`;
+                const newLayer = {
+                    type: layerType.Path,
+                    x: 0, y: 0, width: 0, height: 0,
+                    fill: lastUsedColor,
+                    points: canvasState.pencilPoints,
+                };
                 
                 const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
                 setRectangleLayers(nextLayers);
 
                 // BROADCAST CREATE
                 wsRef.current?.send(JSON.stringify({
-                    type: "LAYER_UPDATE_DELTA", 
+                    type: "LAYER_UPDATE_DELTA", // The receiver algo handles "push if not exists"
                     content: [{ id: newId, layer: newLayer }],
                 }));
 
                 saveState(JSON.stringify(nextLayers));
-                onLayerChange(newId, newLayer);
-                
-                insertingStartRef.current = null;
-                setDraftRectangleLayer(null);
-                setCanvasState({ mode: CanvasMode.None });
+                onLayerChange(newId, newLayer); 
+
+                setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
             }
-            
-            // ... rest of your logic for Translating/Resizing
-            else if (canvasState.mode === CanvasMode.Translating || canvasState.mode === CanvasMode.Resizing) {
-                saveState(JSON.stringify(rectangleLayers));
-                setCanvasState({ mode: CanvasMode.None });
+        }
+
+        // --- SHAPE FINALIZATION (Rectangle, Ellipse, Note, Text) ---
+        else if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
+            const start = insertingStartRef.current;
+            let width = Math.abs(coords.x - start.x);
+            let height = Math.abs(coords.y - start.y);
+            let x = Math.min(start.x, coords.x);
+            let y = Math.min(start.y, coords.y);
+
+            if (width < 5 && height < 5) {
+                width = 100; height = 100;
+                x = start.x - 50; y = start.y - 50;
             }
 
-            e.currentTarget.releasePointerCapture(e.pointerId);
-        }, [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState, onLayerChange]);
+            const newId = `layer-${rectIdCounterRef.current++}`;
+            const newLayer = { type: canvasState.layerType, x, y, width, height, fill: lastUsedColor, value: "" };
+            
+            const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
+            setRectangleLayers(nextLayers);
+
+            // BROADCAST CREATE
+            wsRef.current?.send(JSON.stringify({
+                type: "LAYER_UPDATE_DELTA", 
+                content: [{ id: newId, layer: newLayer }],
+            }));
+
+            saveState(JSON.stringify(nextLayers));
+            onLayerChange(newId, newLayer);
+            
+            insertingStartRef.current = null;
+            setDraftRectangleLayer(null);
+            setCanvasState({ mode: CanvasMode.None });
+        }
+        
+        // ... rest of your logic for Translating/Resizing
+        else if (canvasState.mode === CanvasMode.Translating || canvasState.mode === CanvasMode.Resizing) {
+            saveState(JSON.stringify(rectangleLayers));
+            setCanvasState({ mode: CanvasMode.None });
+        }
+
+        e.currentTarget.releasePointerCapture(e.pointerId);
+    }, [canvasState, clientToWorld, lastUsedColor, rectangleLayers, saveState, onLayerChange]);
 
 
     
