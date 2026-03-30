@@ -11,10 +11,11 @@ import {
   RectangleLayer,
   Color,
 } from "@/types/types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Ellipse from "@/canvasLayers/ellipse";
 import Note from "@/canvasLayers/note";
 import { Text } from "@/canvasLayers/text";
+import { SelectionBox } from "./selection-box";
 
 export default function Board() {
   const [canvasState, setCanvasState] = useState<CanvasState>({
@@ -43,6 +44,7 @@ export default function Board() {
     b: 42,
   });
 
+  // HOLDS THE LIST OF SELECTED LAYERS
   const [selection, setSelection] = useState<string[]>([])
   const resizingBaseLayersRef = useRef<{id: string, layer: any} | null>(null)
 
@@ -172,6 +174,17 @@ export default function Board() {
     [canvasState, clientToWorld, lastUsedColor],
   );
 
+  const selectionBounds = useMemo(() => {
+        const selectedLayers = layers.filter(l => selection.includes(l.id));
+        if (selectedLayers.length === 0) return null;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        selectedLayers.forEach(({ layer }) => {
+            minX = Math.min(minX, layer.x); minY = Math.min(minY, layer.y);
+            maxX = Math.max(maxX, layer.x + layer.width); maxY = Math.max(maxY, layer.y + layer.height);
+        });
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }, [selection, layers]);
+
   return (
     <div className="h-screen w-full relative overflow-hidden bg-amber-100">
       <Toolbar canvasState={canvasState} setCanvasState={setCanvasState} />
@@ -255,6 +268,22 @@ export default function Board() {
             }
             return null;
           })}
+
+          <SelectionBox
+            bound={selectionBounds}
+
+            onResizeHandlerPointerDown={(corner, bounds) => {
+               resizingBaseLayersRef.current = layers.map(l => ({id: l.id, layer: l.layer})) 
+
+               setCanvasState({
+                mode: CanvasMode.Resizing,
+                initialBounds: bounds,
+                corner
+               })
+            }}
+
+            isShowingHandles={selection.length === 1}
+          />
         </g>
       </svg>
     </div>
