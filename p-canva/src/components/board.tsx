@@ -2,8 +2,9 @@
 
 import Rectangle from "@/canvasLayers/rectangle";
 import { Button } from "@/components/ui/button";
+import Toolbar from "@/components/toolbar";
 import { CanvasState, CanvasMode, Layer, LayerType, Point, RectangleLayer, Color } from "@/types/types";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function Board () {
     const [canvasState, setCanvasState] = useState<CanvasState>({mode: CanvasMode.Inserting, layerType: LayerType.Rectangle})
@@ -15,7 +16,7 @@ export default function Board () {
 
     const [lastUsedColor, setLastUsedColor] = useState<Color>({ r: 252, g: 142, b: 42 });
 
-    
+
 
     // Use refs to store mutable values that don't trigger re-renders
     const startPointRef = useRef<Point | null>(null);
@@ -27,7 +28,12 @@ export default function Board () {
         
     }, [])
 
-
+    useEffect(() => {
+      const interval = setInterval(() => {
+        console.log("Canvas State:", canvasState);
+      }, 1000)
+      return () => clearInterval(interval);
+    }, [canvasState])
     
     const onSvgPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         console.log("DOWN EVENT", e.clientX, e.clientY)
@@ -37,7 +43,7 @@ export default function Board () {
           startPointRef.current = coords
           console.log("start point", startPointRef.current)
         }
-    }, [])
+    }, [canvasState])
 
     const onSvgPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         // console.log("MOVE EVENT", e.clientX, e.clientY)
@@ -108,15 +114,18 @@ export default function Board () {
             // basically switch to cursor after creating the rectangle
             startPointRef.current = null;
             setDraftLayer([]);
-            // setCanvasState({mode: CanvasMode.None})
+            setCanvasState({mode: CanvasMode.None})
         }
-    }, [])
+    }, [canvasState])
 
 
     return (
         <div className="h-screen w-full relative overflow-hidden bg-amber-100">
+          <Toolbar canvasState={canvasState} setCanvasState={setCanvasState} />
+
+
         <svg 
-          className="absolute top-0 left-0 w-full h-full" 
+          className="top-0 left-0 w-full h-full" 
           onPointerDown={onSvgPointerDown}
           onPointerMove={onSvgPointerMove}
           onPointerUp={onSvgPointerUp}
