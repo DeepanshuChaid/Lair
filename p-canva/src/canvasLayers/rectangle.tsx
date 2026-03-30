@@ -3,13 +3,13 @@ import { RectangleLayer } from "@/types/types";
 
 interface RectangleProps {
     id: string;
-    Layer: RectangleLayer
+    layer: RectangleLayer
     onPointerDown: (e: React.PointerEvent, id: string) => void;
     selectionColor?: string;
 }
 
-export default function Rectangle({ id, Layer, onPointerDown, selectionColor }: RectangleProps) {
-    const { x, y, width, height, fill } = Layer;
+export default function Rectangle({ id, layer, onPointerDown, selectionColor }: RectangleProps) {
+    const { x, y, width, height, fill } = layer;
 
     return (
         <rect 

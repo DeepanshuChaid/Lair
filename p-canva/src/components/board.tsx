@@ -5,18 +5,66 @@ import { Button } from "@/components/ui/button";
 import Toolbar from "@/components/toolbar";
 import { CanvasState, CanvasMode, Layer, LayerType, Point, RectangleLayer, Color } from "@/types/types";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Ellipse from "@/canvasLayers/ellipse";
 
 export default function Board () {
     const [canvasState, setCanvasState] = useState<CanvasState>({mode: CanvasMode.Inserting, layerType: LayerType.Rectangle})
 
     const [layers, setLayer] = useState<Array<{ id: string; layer: any }>>([]);
-    const [draftLayer, setDraftLayer] = useState<Array<{ id: string; layer: any }>>([]);
+
+    // To this:
+    const [draftLayer, setDraftLayer] = useState<{ id: string; layer: Layer } | null>(null);
 
     const [selection, setSelection] = useState<string[]>([])
+
+    const [camera, setCamera] = useState<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
 
     const [lastUsedColor, setLastUsedColor] = useState<Color>({ r: 252, g: 142, b: 42 });
 
 
+    const svgRef = useRef<SVGSVGElement>(null);
+
+    // ZOOM LOGIC
+    const onWheel = useCallback((e: WheelEvent) => {
+      e.preventDefault();
+
+      if (e.ctrlKey || e.metaKey) {
+        const zoomSpeed = 0.001;
+        const delta = -e.deltaY
+        const scaleChange = delta * zoomSpeed;
+
+        setCamera(prev => {
+          const newScale = Math.min(Math.max(prev.scale + scaleChange, 0.1), 10)
+          const dx = (e.clientX - prev.x) * (newScale / prev.scale - 1)
+          const dy = (e.clientY - prev.y) * (newScale / prev.scale - 1)
+          return {x: prev.x - dx, y: prev.y - dy, scale: newScale}
+        })
+      } else {
+        setCamera(prev => ({
+          ...prev,
+          x: prev.x - (e.shiftKey ? e.deltaY : e.deltaX),
+          y: prev.y - (e.shiftKey ? e.deltaX : e.deltaY)
+        }))
+      }
+    }, [])
+
+    useEffect(() => {
+      const svg = svgRef.current;
+      if (svg) {
+      svg.addEventListener("wheel", onWheel, {passive: false});
+      return () => {
+        svg.removeEventListener("wheel", onWheel);
+      }
+    }}, [])
+
+    const clientToWorld = useCallback((clientX: number, clientY: number) => {
+        const bounds = svgRef.current?.getBoundingClientRect();
+        if (!bounds) return { x: clientX, y: clientY };
+        return {
+            x: (clientX - bounds.left - camera.x) / camera.scale,
+            y: (clientY - bounds.top - camera.y) / camera.scale
+        };
+    }, [camera])
 
     // Use refs to store mutable values that don't trigger re-renders
     const startPointRef = useRef<Point | null>(null);
@@ -30,24 +78,25 @@ export default function Board () {
 
     useEffect(() => {
       const interval = setInterval(() => {
-        console.log("Canvas State:", canvasState);
-      }, 1000)
+        // console.log("Canvas State:", canvasState);
+        console.log("Layers:", layers);
+      }, 5000)
       return () => clearInterval(interval);
     }, [canvasState])
     
     const onSvgPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         console.log("DOWN EVENT", e.clientX, e.clientY)
-        const coords = {x: e.clientX, y: e.clientY}
+        const coords = clientToWorld(e.clientX, e.clientY);
         
         if (canvasState.mode === CanvasMode.Inserting) {
           startPointRef.current = coords
           console.log("start point", startPointRef.current)
         }
-    }, [canvasState])
+    }, [canvasState, clientToWorld])
 
     const onSvgPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         // console.log("MOVE EVENT", e.clientX, e.clientY)
-        const coords = {x: e.clientX, y: e.clientY}
+        const coords = clientToWorld(e.clientX, e.clientY);   
 
         if (canvasState.mode === CanvasMode.Inserting && startPointRef.current) {
             // here we will show the preview of the layer that is being created using the starting point and the current point to calculate the XYMH and then we can set the draft layer to that XYMH so that it can be rendered on the screen
@@ -60,31 +109,25 @@ export default function Board () {
             let x = Math.min(start.x, coords.x);
             let y = Math.min(start.y, coords.y);
 
-            const newDraftLayer = {
+
+            setDraftLayer({
                 id: "draft",
-                 layer: {
+                layer: {
                     type: canvasState.layerType,
                     x,
                     y,
                     width,
                     height,
                     fill: lastUsedColor
-                  }}
-
-            console.log("DRAFT LAYER", newDraftLayer)
-            
-
-
-            setDraftLayer(
-              prev => [...prev, newDraftLayer]
-            )
+                } as Layer
+            });
         }
 
-    }, [lastUsedColor, canvasState])
+    }, [lastUsedColor, canvasState, clientToWorld])
 
     const onSvgPointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
         console.log("UP EVENT", e.clientX, e.clientY)
-        const coords = {x: e.clientX, y: e.clientY}
+        const coords = clientToWorld(e.clientX, e.clientY);
 
         if (canvasState.mode === CanvasMode.Inserting && startPointRef.current) {
             const start = startPointRef.current;
@@ -113,10 +156,10 @@ export default function Board () {
             // here we can clear the starting point and draft layer and reset the canvas state to none 
             // basically switch to cursor after creating the rectangle
             startPointRef.current = null;
-            setDraftLayer([]);
+            setDraftLayer(null);
             setCanvasState({mode: CanvasMode.None})
         }
-    }, [canvasState])
+    }, [canvasState, clientToWorld, lastUsedColor])
 
 
     return (
@@ -126,23 +169,32 @@ export default function Board () {
 
         <svg 
           className="top-0 left-0 w-full h-full" 
+          ref={svgRef}
           onPointerDown={onSvgPointerDown}
           onPointerMove={onSvgPointerMove}
           onPointerUp={onSvgPointerUp}
           style={{ backgroundColor: "#000" }}
         >
-          {draftLayer?.map(({id, layer}, index) => {
-            if (layer.type === LayerType.Rectangle) {
-              return (
-               <Rectangle 
-                id={id}
-                key={index}
-                onPointerDown={()=> {}}
-                Layer={layer}
-               />
-              ) 
-            }
-          })}
+          <g style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`, transformOrigin: "0 0" }}>
+
+          {draftLayer && (
+            draftLayer.layer.type === LayerType.Rectangle ? (
+              <Rectangle
+                id={draftLayer.id}
+                key={draftLayer.id}
+                layer={draftLayer.layer}
+                onPointerDown={() => {}}
+              />
+            ) : draftLayer.layer.type === LayerType.Ellipse ? (
+              <Ellipse
+                id={draftLayer.id}
+                key={draftLayer.id}
+                layer={draftLayer.layer}
+                onPointerDown={() => {}}
+              />
+            ) : null
+          )}
+
 
           {layers.map(({id: layerId, layer}) => {
             const selectionColor = selection.includes(layerId) ? "transparent" : undefined;
@@ -151,13 +203,26 @@ export default function Board () {
                <Rectangle
                  key={layerId}
                  id={layerId}
-                 Layer={layer}
+                 layer={layer}
                  onPointerDown={onPointerDown}
                  selectionColor={selectionColor}
                />
              )
             }
+
+            if (layer.type === LayerType.Ellipse) {
+              return (
+                <Ellipse
+                  key={layerId}
+                  id={layerId}
+                  layer={layer}
+                  onPointerDown={onPointerDown}
+                  selectionColor={selectionColor}
+                />
+              )
+            }
         })}
+         </g>
         </svg>
       </div>
     )
