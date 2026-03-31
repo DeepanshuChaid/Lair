@@ -10,6 +10,7 @@ import {
   Point,
   RectangleLayer,
   Color,
+  Side,
 } from "@/types/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Ellipse from "@/canvasLayers/ellipse";
@@ -112,6 +113,10 @@ export default function Board() {
       if (canvasState.mode === CanvasMode.Inserting) {
         startPointRef.current = coords;
       }
+
+      if (canvasState.mode === CanvasMode.None || canvasState.mode === CanvasMode.SelectionNet) {
+        setSelection([]);
+      }
     },
     [canvasState, clientToWorld],
   );
@@ -133,6 +138,39 @@ export default function Board() {
             fill: lastUsedColor,
           } as Layer,
         });
+      }
+
+      else if (canvasState.mode === CanvasMode.Resizing && canvasState.initialBounds) {
+          const {initialBounds, corner} = canvasState;
+
+          const newBounds = {...initialBounds}
+
+          if ((corner & Side.left) === Side.left) {
+            newBounds.x = Math.min(coords.x, initialBounds.x + initialBounds.width);
+            newBounds.width = Math.abs(initialBounds.x + initialBounds.width - coords.x)
+          } 
+
+          if ((corner & Side.right) === Side.right) {
+            newBounds.x = Math.min(coords.x, initialBounds.x)
+            newBounds.width = Math.abs(coords.x - initialBounds.x)
+          }
+
+          if ((corner & Side.top) === Side.top) {
+              newBounds.y = Math.min(coords.y, initialBounds.y + initialBounds.height)
+              newBounds.height = Math.abs(initialBounds.y + initialBounds.height - coords.y)
+          }
+          
+          if ((corner & Side.bottom) === Side.bottom) {
+            newBounds.y = Math.min(coords.y, initialBounds.y)
+            newBounds.height = Math.abs(coords.y - initialBounds.y)
+          }
+
+          setLayer(prev => 
+            prev.map((l) => 
+              selection.includes(l.id) ? {...l, layer: {...l.layer, ...newBounds}} : l
+            )
+          )
+
       }
     },
     [lastUsedColor, canvasState, clientToWorld],
@@ -233,13 +271,18 @@ export default function Board() {
 
           {/* Rendered Layers */}
           {layers.map(({ id, layer }) => {
+            const onPointerDown = (e: React.PointerEvent) =>  {
+              e.stopPropagation()
+              setSelection([id])
+              setCanvasState({mode: CanvasMode.SelectionNet, origin: {x: e.clientX, y: e.clientY}, current: {x: e.clientX, y: e.clientY}})
+            }
             if (layer.type === LayerType.Rectangle)
               return (
                 <Rectangle
                   key={id}
                   id={id}
                   layer={layer}
-                  onPointerDown={() => {}}
+                  onPointerDown={onPointerDown}
                 />
               );
             if (layer.type === LayerType.Ellipse)
@@ -248,7 +291,7 @@ export default function Board() {
                   key={id}
                   id={id}
                   layer={layer}
-                  onPointerDown={() => {}}
+                  onPointerDown={onPointerDown}
                 />
               );
             if (
@@ -261,7 +304,7 @@ export default function Board() {
                   key={id}
                   id={id}
                   layer={layer}
-                  onPointerDown={() => {}}
+                  onPointerDown={onPointerDown}
                   onValueChange={(v) => handleValueChange(id, v)}
                 />
               );
