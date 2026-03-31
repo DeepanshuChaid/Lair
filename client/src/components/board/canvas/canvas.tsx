@@ -183,15 +183,14 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
                     if (data.type === "LAYER_MOVE") {
                         const id = data.content.id
-                        const x = data.content.x
-                        const y = data.content.y
+                        const offset = data.content.offset
 
                         setRectangleLayers((prev) => {
                             const next = prev.map((item) => 
                                     item.id === id 
-                                    ? { ...item, layer: { ...item.layer, x, y } } 
+                                    ? { ...item, layer: { ...item.layer, x: item.layer.x + offset.x, y: item.layer.y + offset.y } } 
                                     : item
-                            );  
+                            );
                             return next;
                         });
                     }
@@ -520,21 +519,21 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
             // SENDING ONLY ID AND OFFSET
             const now = Date.now()
-            if (selectedLayers && now - lastSentMoveRef?.current > 30 && wsRef.current?.readyState === WebSocket.OPEN){
-                lastSentMoveRef.current = now;
-                wsRef.current?.send(JSON.stringify({
-                    type: "LAYER_MOVE",
-                    content: {id: selection[0], x: selectedLayers.layer.x, y: selectedLayers.layer.y}
-                }))
-            }
-
-            // if (now - lastSentMoveRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+            // if (selectedLayers && now - lastSentMoveRef?.current > 30 && wsRef.current?.readyState === WebSocket.OPEN){
             //     lastSentMoveRef.current = now;
             //     wsRef.current?.send(JSON.stringify({
             //         type: "LAYER_MOVE",
             //         content: {id: selection[0], offset}
             //     }))
             // }
+
+            if (now - lastSentMoveRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+                lastSentMoveRef.current = now;
+                wsRef.current?.send(JSON.stringify({
+                    type: "LAYER_MOVE",
+                    content: {id: selection[0], offset}
+                }))
+            }
 
         } 
 
