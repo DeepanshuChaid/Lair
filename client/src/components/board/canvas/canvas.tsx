@@ -33,6 +33,8 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
     const wsRef = useRef<WebSocket | null>(null);
     const lastSentRef = useRef<number>(0);
 
+    const lastSentMoveRef = useRef(0)
+
     const [rectangleLayers, setRectangleLayers] = useState<Array<{ id: string; layer: any }>>([]);
     const [draftRectangleLayer, setDraftRectangleLayer] = useState<{ id: string; layer: any } | null>(null);
 
@@ -177,6 +179,21 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     if (data.type === "LAYER_DELETE") {
                         const idsToDelete = data.content;
                         setRectangleLayers((prev) => prev.filter(l => !idsToDelete.includes(l.id)));
+                    }
+
+                    if (data.type === "LAYER_MOVE") {
+                        const id = data.content.id
+                        const x = data.content.x
+                        const y = data.content.y
+
+                        setRectangleLayers((prev) => {
+                            const next = prev.map((item) => 
+                                    item.id === id 
+                                    ? { ...item, layer: { ...item.layer, x, y } } 
+                                    : item
+                            );  
+                            return next;
+                        });
                     }
 
                     if (data.type === "LAYER_CREATE") {
@@ -497,6 +514,28 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             });
 
             setCanvasState(prev => ({ ...prev, current: coords }));
+
+            const selectedLayers = rectangleLayers.find(l => l.id === selection[0])
+            if (!selectedLayers) return;
+
+            // SENDING ONLY ID AND OFFSET
+            const now = Date.now()
+            if (selectedLayers && now - lastSentMoveRef?.current > 30 && wsRef.current?.readyState === WebSocket.OPEN){
+                lastSentMoveRef.current = now;
+                wsRef.current?.send(JSON.stringify({
+                    type: "LAYER_MOVE",
+                    content: {id: selection[0], x: selectedLayers.layer.x, y: selectedLayers.layer.y}
+                }))
+            }
+
+            // if (now - lastSentMoveRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+            //     lastSentMoveRef.current = now;
+            //     wsRef.current?.send(JSON.stringify({
+            //         type: "LAYER_MOVE",
+            //         content: {id: selection[0], offset}
+            //     }))
+            // }
+
         } 
 
         // --- 2. RESIZING LOGIC (The Fixed Part) ---
@@ -566,7 +605,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                 content: { 
                     x: coords.x, 
                     y: coords.y, 
-                    name: user?.name || "Anonymous" 
+                    name: user?.name || "Amie" 
                 } 
             }));
         }

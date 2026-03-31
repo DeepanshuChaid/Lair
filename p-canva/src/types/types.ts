@@ -27,9 +27,6 @@ export type CanvasState = {
     // BASICALLY IF ITS IN X WE INCREASE / DEACRESE THE WIDTH IF ITS IN Y COORDS WE KNOW WE NEED TO MUTATE THE HEIGHT
     corner: Side
 } | {
-    mode: CanvasMode.Translating;
-    current: Point;
-} | {
     mode: CanvasMode.Pencil;
     pencilPoints?: number[][];
 }
