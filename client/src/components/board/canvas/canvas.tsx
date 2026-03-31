@@ -40,6 +40,8 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
     const [rectangleLayers, setRectangleLayers] = useState<Array<{ id: string; layer: any }>>([]);
     const [draftRectangleLayer, setDraftRectangleLayer] = useState<{ id: string; layer: any } | null>(null);
 
+    const [othersDraftLayer, setOtherDraftLayer] = useState<{ id: string; layer: any } | null>(null)
+
     const translatingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>([]);
     const resizingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>([]);
 
@@ -178,6 +180,10 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                                 };
                             });
                         });
+                    }
+
+                    if (data.type === "DRAFT_LAYER") {
+                        setOtherDraftLayer(data.content)
                     }
 
                     if (data.type === "LAYER_DELETE") {
@@ -382,7 +388,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             }));
         } else if (canvasState.mode === CanvasMode.Inserting && insertingStartRef.current) {
             const start = insertingStartRef.current;
-            setDraftRectangleLayer({
+            const draftLayer = {
                 id: "draft",
                 layer: {
                     type: canvasState.layerType,
@@ -392,7 +398,19 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     height: Math.abs(coords.y - start.y),
                     fill: lastUsedColor,
                 },
-            });
+            }
+            setDraftRectangleLayer(draftLayer);
+
+            // TODO : MAKE THIS AN ARRAY WHAT IF MULTIPLE USER ARE DRAWING
+            const now = Date.now()
+            if (now - lastSentMoveRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+                lastSentMoveRef.current = now;
+                wsRef.current.send(JSON.stringify({
+                    type: "DRAFT_LAYER",
+                    content: draftLayer,
+                    userId: user?.id,
+                }))
+            }
         }
     }, [canvasState, clientToWorld, lastUsedColor]);
 
@@ -528,7 +546,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                 const movedLayers = next.filter(l => selection.includes(l.id));
                 // throttledLayerBroadcast(movedLayers); 
                 const now = Date.now()
-                if (now - lastSentMoveRef.current > 5 && wsRef.current?.readyState === WebSocket.OPEN) {
+                if (now - lastSentMoveRef.current > 2 && wsRef.current?.readyState === WebSocket.OPEN) {
                     lastSentMoveRef.current = now;
                     wsRef.current?.send(JSON.stringify({
                         type: "LAYER_MOVE",
@@ -872,6 +890,40 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     />
 
                     <CursorPresence cursors={otherCursors} />
+
+                    {othersDraftLayer && (
+                        othersDraftLayer.layer.type === layerType.Ellipse ? (
+                            <Ellipse 
+                                id={othersDraftLayer.id} 
+                                layer={othersDraftLayer.layer} 
+                                onPointerDown={() => {}} 
+                                selectionColor={strokeColor} 
+                            />
+                        ) : othersDraftLayer.layer.type === layerType.Text ? (
+                            <Text 
+                                id={othersDraftLayer.id} 
+                                layer={othersDraftLayer.layer} 
+                                onPointerDown={() => {}} 
+                                selectionColor={strokeColor} 
+                                onValueChange={() => {}}
+                            />
+                        ) : othersDraftLayer.layer.type === layerType.Note ? (
+                            <Note 
+                                id={othersDraftLayer.id} 
+                                layer={othersDraftLayer.layer} 
+                                onPointerDown={() => {}} 
+                                selectionColor={strokeColor} 
+                                onValueChange={() => {}}
+                            />
+                        ) : (
+                            <RectangleTool 
+                                id={othersDraftLayer.id} 
+                                layer={othersDraftLayer.layer} 
+                                onPointerDown={() => {}} 
+                                selectionColor={strokeColor} 
+                            />
+                        ) 
+                    )}
                 </g>
             </svg>
         </main>
