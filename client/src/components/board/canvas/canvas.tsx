@@ -19,11 +19,13 @@ import { ColorToCss, throttle } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
+import { Layers } from "lucide-react";
 
 export default function Canvas({ id, title, dirtyLayers, save }: { id: string, title: string, dirtyLayers: React.MutableRefObject<Map<string, { layer: any, status: 'update' | 'delete' | 'create' }>>, save: () => void }) {
     const [canvasState, setCanvasState] = useState<CanvasState>({ mode: CanvasMode.None });
     const { undo, redo, canUndo, canRedo, saveState, currentState } = useHistory();
 
+    const dragStartlayersRef = useRef<Map<string, {x: number, y: number}>>(new Map())
     const router = useRouter();
     const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
     const [lastUsedColor, setLastUsedColor] = useState<color>({ r: 252, g: 142, b: 42 })
@@ -71,10 +73,11 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             JSON.stringify({
                 type: "CURSOR_MOVE",
                 content: { x, y, name },
+                userId: user?.id,
             })
             );
         }
-        }, 50),
+        }, 25),
     []
     );
 
@@ -87,6 +90,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             JSON.stringify({
                 type: "LAYER_UPDATE_DELTA",
                 content: layers,
+                userId: user?.id,
             })
             );
         }
@@ -268,6 +272,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         wsRef.current?.send(JSON.stringify({
             type: "LAYER_DELETE",
             content: selection,
+            userId: user?.id,
         }));
 
         setRectangleLayers(nextLayers);
@@ -414,6 +419,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                 wsRef.current?.send(JSON.stringify({
                     type: "LAYER_UPDATE_DELTA", // The receiver algo handles "push if not exists"
                     content: [{ id: newId, layer: newLayer }],
+                    userId: user?.id,
                 }));
 
                 saveState(JSON.stringify(nextLayers));
@@ -446,6 +452,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             wsRef.current?.send(JSON.stringify({
                 type: "LAYER_UPDATE_DELTA", 
                 content: [{ id: newId, layer: newLayer }],
+                userId: user?.id,
             }));
 
             saveState(JSON.stringify(nextLayers));
@@ -487,6 +494,18 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
         setSelection(e.shiftKey ? (prev => prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]) : [layerId]);
         setCanvasState({ mode: CanvasMode.Translating, current: coords });
+
+        const start = new Map()
+
+        rectangleLayers.forEach(l => {
+            if (selection.includes(l.id) || l.id === layerId) {
+                start.set(l.id, {x: l.layer.x, y: l.layer.y})
+            }
+        })
+
+        dragStartlayersRef.current = start
+
+        setCanvasState({mode: CanvasMode.Translating, current: coords, startCoords: coords})
     }, [canvasState.mode, clientToWorld, rectangleLayers]);
 
     const onPointerMove = useCallback((e: React.PointerEvent) => {
@@ -507,7 +526,16 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                 );
                 
                 const movedLayers = next.filter(l => selection.includes(l.id));
-                throttledLayerBroadcast(movedLayers); 
+                // throttledLayerBroadcast(movedLayers); 
+                const now = Date.now()
+                if (now - lastSentMoveRef.current > 5 && wsRef.current?.readyState === WebSocket.OPEN) {
+                    lastSentMoveRef.current = now;
+                    wsRef.current?.send(JSON.stringify({
+                        type: "LAYER_MOVE",
+                        content: {id: selection[0], offset},
+                        userId: user?.id,
+                    }))
+                }
                 
                 return next;
             });
@@ -517,23 +545,6 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             const selectedLayers = rectangleLayers.find(l => l.id === selection[0])
             if (!selectedLayers) return;
 
-            // SENDING ONLY ID AND OFFSET
-            const now = Date.now()
-            // if (selectedLayers && now - lastSentMoveRef?.current > 30 && wsRef.current?.readyState === WebSocket.OPEN){
-            //     lastSentMoveRef.current = now;
-            //     wsRef.current?.send(JSON.stringify({
-            //         type: "LAYER_MOVE",
-            //         content: {id: selection[0], offset}
-            //     }))
-            // }
-
-            if (now - lastSentMoveRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
-                lastSentMoveRef.current = now;
-                wsRef.current?.send(JSON.stringify({
-                    type: "LAYER_MOVE",
-                    content: {id: selection[0], offset}
-                }))
-            }
 
         } 
 
@@ -604,7 +615,8 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                 content: { 
                     x: coords.x, 
                     y: coords.y, 
-                    name: user?.name || "Amie" 
+                    name: user?.name || "Amie",
+                    userId: user?.id,
                 } 
             }));
         }
@@ -637,6 +649,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             wsRef.current?.send(JSON.stringify({
                 type: "LAYER_UPDATE_DELTA",
                 content: transformPayload,
+                userId: user?.id,
             }));
 
             translatingBaseLayersRef.current = [];
@@ -669,7 +682,8 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
         if (updatedLayerObj && wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({
                 type: "LAYER_UPDATE_DELTA",
-                content: [updatedLayerObj]
+                content: [updatedLayerObj],
+                userId: user?.id,
             }));
         }
 
@@ -688,7 +702,8 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
                     dirtyLayers.current.set(item.id, { layer: updatedLayer, status: 'update' });
                     wsRef.current?.send(JSON.stringify({
                         type: "LAYER_UPDATE_DELTA",
-                        content: [{ id: item.id, layer: updatedLayer }]
+                        content: [{ id: item.id, layer: updatedLayer }],
+                        userId: user?.id,
                     }))
 
                     return { ...item, layer: updatedLayer };

@@ -99,6 +99,10 @@ func (r *Room) broadcastMessage(message *Message) {
 
 	// send the message to every clients send channel
 	for _, client := range r.Clients {
+		if client.UserId == message.UserId {
+			continue
+		}
+		
 		select {
 		case client.Send <- message:
 		default:
