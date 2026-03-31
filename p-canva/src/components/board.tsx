@@ -204,13 +204,14 @@ export default function Board() {
         setDraftLayer(null);
         setCanvasState({ mode: CanvasMode.None });
       } else if (canvasState.mode === CanvasMode.Resizing) {
-        // I FKIN WROTE THIS LINE YOU FKIN YEAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH!
+        // I FKIN WROTE THIS LINE YOU FKIN NIII ... YEAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH!
         setCanvasState({ mode: CanvasMode.None });
       }
     },
     [canvasState, clientToWorld, lastUsedColor],
   );
 
+  // WE ARE USING USEMEMO AS THE CALULATIONS ARE HEAVY WHICH WILL LAG THE BROWSER USEMEMO BASICALLY REMEMBERS THE RETURN VALUE
   const selectionBounds = useMemo(() => {
         const selectedLayers = layers.filter(l => selection.includes(l.id));
         if (selectedLayers.length === 0) return null;
