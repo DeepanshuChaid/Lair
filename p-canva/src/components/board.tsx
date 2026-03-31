@@ -140,40 +140,36 @@ export default function Board() {
         });
       }
 
-      else if (canvasState.mode === CanvasMode.Resizing && canvasState.initialBounds) {
-          const {initialBounds, corner} = canvasState;
+      // Inside onSvgPointerMove...
+      if (canvasState.mode === CanvasMode.Resizing && canvasState.initialBounds) {
+        const { initialBounds, corner } = canvasState;
+        const newBounds = { ...initialBounds };
 
-          const newBounds = {...initialBounds}
+        // Horizontal Logic
+        if ((corner & Side.left) === Side.left) {
+          newBounds.x = Math.min(coords.x, initialBounds.x + initialBounds.width);
+          newBounds.width = Math.abs(initialBounds.x + initialBounds.width - coords.x);
+        } else if ((corner & Side.right) === Side.right) {
+          newBounds.x = Math.min(coords.x, initialBounds.x);
+          newBounds.width = Math.abs(coords.x - initialBounds.x);
+        }
 
-          if ((corner & Side.left) === Side.left) {
-            newBounds.x = Math.min(coords.x, initialBounds.x + initialBounds.width);
-            newBounds.width = Math.abs(initialBounds.x + initialBounds.width - coords.x)
-          } 
+        // Vertical Logic
+        if ((corner & Side.top) === Side.top) {
+          newBounds.y = Math.min(coords.y, initialBounds.y + initialBounds.height);
+          newBounds.height = Math.abs(initialBounds.y + initialBounds.height - coords.y);
+        } else if ((corner & Side.bottom) === Side.bottom) {
+          newBounds.y = Math.min(coords.y, initialBounds.y);
+          newBounds.height = Math.abs(coords.y - initialBounds.y);
+        }
 
-          if ((corner & Side.right) === Side.right) {
-            newBounds.x = Math.min(coords.x, initialBounds.x)
-            newBounds.width = Math.abs(coords.x - initialBounds.x)
-          }
-
-          if ((corner & Side.top) === Side.top) {
-              newBounds.y = Math.min(coords.y, initialBounds.y + initialBounds.height)
-              newBounds.height = Math.abs(initialBounds.y + initialBounds.height - coords.y)
-          }
-          
-          if ((corner & Side.bottom) === Side.bottom) {
-            newBounds.y = Math.min(coords.y, initialBounds.y)
-            newBounds.height = Math.abs(coords.y - initialBounds.y)
-          }
-
-          setLayer(prev => 
-            prev.map((l) => 
-              selection.includes(l.id) ? {...l, layer: {...l.layer, ...newBounds}} : l
-            )
-          )
-
+        // UPDATE THE ACTUAL LAYER
+        setLayer(prev => prev.map(l => 
+          selection.includes(l.id) ? { ...l, layer: { ...l.layer, ...newBounds } } : l
+        ));
       }
-    },
-    [lastUsedColor, canvasState, clientToWorld],
+
+    }, [lastUsedColor, canvasState, clientToWorld],
   );
 
   const onSvgPointerUp = useCallback(
@@ -206,6 +202,9 @@ export default function Board() {
         setLayer((prev) => [...prev, { id: newId, layer: newLayer }]);
         startPointRef.current = null;
         setDraftLayer(null);
+        setCanvasState({ mode: CanvasMode.None });
+      } else if (canvasState.mode === CanvasMode.Resizing) {
+        // I FKIN WROTE THIS LINE YOU FKIN YEAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH!
         setCanvasState({ mode: CanvasMode.None });
       }
     },
@@ -313,14 +312,14 @@ export default function Board() {
           })}
 
           <SelectionBox
-            bound={selectionBounds}
+            bounds={selectionBounds}
 
             onResizeHandlerPointerDown={(corner, bounds) => {
                resizingBaseLayersRef.current = layers.map(l => ({id: l.id, layer: l.layer})) 
 
                setCanvasState({
                 mode: CanvasMode.Resizing,
-                initialBounds: bounds,
+                initialBounds: bounds!,
                 corner
                })
             }}
