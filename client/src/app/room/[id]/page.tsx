@@ -42,7 +42,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     const interval = setInterval(() => {
       mutate()
-    }, 2000)
+    }, 30000)
 
     return () => clearInterval(interval)
   }, [])
