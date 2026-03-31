@@ -478,6 +478,12 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
             
             insertingStartRef.current = null;
             setDraftRectangleLayer(null);
+
+            wsRef?.current?.send(JSON.stringify({
+                type: "DRAFT_LAYER",
+                content: null,
+            }))
+
             setCanvasState({ mode: CanvasMode.None });
         }
         
@@ -523,7 +529,7 @@ export default function Canvas({ id, title, dirtyLayers, save }: { id: string, t
 
         dragStartlayersRef.current = start
 
-        setCanvasState({mode: CanvasMode.Translating, current: coords, startCoords: coords})
+        setCanvasState({mode: CanvasMode.Translating, current: coords})
     }, [canvasState.mode, clientToWorld, rectangleLayers]);
 
     const onPointerMove = useCallback((e: React.PointerEvent) => {
