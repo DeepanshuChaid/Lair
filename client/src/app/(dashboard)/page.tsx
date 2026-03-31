@@ -27,6 +27,11 @@ export default function DashboardPage() {
     const { data, isLoading } = useQuery({
         queryKey: ["rooms"],
         queryFn: fetchRooms,
+        // --- CACHING CONFIG ---
+        staleTime: 1000 * 60 * 5, // Data is considered fresh for 5 minutes
+        gcTime: 1000 * 60 * 30,    // Keep the data in cache for 30 mins even if unused
+        retry: false,              // Don't spam the API if the user isn't logged in
+        refetchOnWindowFocus: false, // Prevents refetching every time you switch tabs
     })
 
     return (
