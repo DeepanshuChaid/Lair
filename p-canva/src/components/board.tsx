@@ -140,7 +140,7 @@ export default function Board() {
         });
       }
 
-      // Inside onSvgPointerMove...
+      
       if (canvasState.mode === CanvasMode.Resizing && canvasState.initialBounds) {
         const { initialBounds, corner } = canvasState;
         const newBounds = { ...initialBounds };
@@ -167,6 +167,26 @@ export default function Board() {
         setLayer(prev => prev.map(l => 
           selection.includes(l.id) ? { ...l, layer: { ...l.layer, ...newBounds } } : l
         ));
+      }
+
+      if (canvasState.mode === CanvasMode.Translating && canvasState.current) {
+        // we calculate the distance from initial position to current position
+        const xDistance = coords.x - canvasState.current.x
+        const yDistance = coords.y - canvasState.current.y
+
+        // we add that distance to our layer
+        setLayer(prev => 
+          prev.map(l => 
+            selection.includes(l.id)
+             ? {...l, layer: {...l.layer, x: l.layer.x + xDistance, y: l.layer.y + yDistance}}
+             : l
+            )
+        )
+
+        // we set the new intial to our current position
+        setCanvasState({mode: CanvasMode.Translating, current: coords})
+
+
       }
 
     }, [lastUsedColor, canvasState, clientToWorld],
@@ -203,10 +223,11 @@ export default function Board() {
         startPointRef.current = null;
         setDraftLayer(null);
         setCanvasState({ mode: CanvasMode.None });
-      } else if (canvasState.mode === CanvasMode.Resizing) {
+      } else if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
         // I FKIN WROTE THIS LINE YOU FKIN NIII ... YEAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH!
         setCanvasState({ mode: CanvasMode.None });
       }
+      
     },
     [canvasState, clientToWorld, lastUsedColor],
   );
@@ -272,9 +293,11 @@ export default function Board() {
           {/* Rendered Layers */}
           {layers.map(({ id, layer }) => {
             const onPointerDown = (e: React.PointerEvent) =>  {
+              const coords = clientToWorld(e.clientX, e.clientY)
               e.stopPropagation()
               setSelection([id])
-              setCanvasState({mode: CanvasMode.SelectionNet, origin: {x: e.clientX, y: e.clientY}, current: {x: e.clientX, y: e.clientY}})
+              // CURRENT REFERS TO THE CURRENT COORDS OF THE CURSOR IN THE SVG WORLD
+              setCanvasState({mode: CanvasMode.Translating, current: {x: coords.x, y: coords.y}})
             }
             if (layer.type === LayerType.Rectangle)
               return (
