@@ -716,7 +716,7 @@ export default function Canvas({
           // throttledLayerBroadcast(movedLayers);
           const now = Date.now();
           if (
-            now - lastSentMoveRef.current > 5 &&
+            now - lastSentMoveRef.current > 16 &&
             wsRef.current?.readyState === WebSocket.OPEN
           ) {
             lastSentMoveRef.current = now;
