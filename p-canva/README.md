@@ -15,3 +15,36 @@ ans: record is just a type in typescript that is used to store key-value pairs. 
 ans: So onPointerMove records are fasst like faster react is able to handle so when were moving the cursor it was adding more than it should because react would add to the x coordsinate 3 times in a row even before rendering. i know kind of confusing but its just means the pointer move is fast enough that react rendering engine is not fast enough for us to calc the offset. And thats why layer was slipping awaY.
 
 SO how do we solve this well its simpler than it looks and feels we just capture the x and y of the layer on pointerDown and then we are dargging we calc the distance and add that distance to the layer. (NOTE :- WE ARE NOT SUPPOSED TO CHANGE THE COORDS OF THE MOUSE IN THE CANVASSTATE)
+
+5. How do we add eraser to the board?
+ans: first task is find if the cursor is on the layer or not and if it is then delete it. now it might seem like a hard thing to do but we are just wait i dont even need explain in sentence :- 
+
+function FindLayerByPoint(x, y, layers) {
+    //  we are minusing one because surprise if you forgot array consitutes of 0 too yk?
+    //  we are just checking how many layers are there from the top to bottom and dont stop until we are at zero
+    for (let i = layer.length() - 1; i >= 0; i --) {
+        const layerObj = layers[i];
+        // get the layer obj
+        const layer = layerObj.layer;
+        // get only the layer
+
+        if (
+            // if our mouse is on the right of the x like if it is more cuz yk x increse on the right decreases on the left
+            x >= layer.x &&
+
+            // and if it is between the left and right side of the layer
+            x <= layer.x + layer.width &&
+
+            // and if it is between the top and bottom side of the layer
+            y >= layer.y &&
+            y <= layer.y + layer.height
+        ) {
+            // so from our above logic we can conclude that he mouse in inside the layer so we return the id
+            return layer.id 
+        }
+        if we conditions are not met return null
+        return null
+    }
+} 
+
+after this we just create a callback func for performance and filter and send the layer in websocket and just add this in add this in pointer down and move and yippe you got a working eraser thought it will not work on pencil cuz why should it?
