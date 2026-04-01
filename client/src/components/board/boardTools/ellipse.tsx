@@ -25,7 +25,7 @@ export const Ellipse = memo(
           style={{
             // We use transform for the "Direct DOM" drag
             transform: `translate(${x}px, ${y}px)`,
-            transition: "none",
+            transition: "none !important",
           }}
           cx={width / 2}
           cy={height / 2}

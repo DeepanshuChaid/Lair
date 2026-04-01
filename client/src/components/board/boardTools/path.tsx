@@ -31,7 +31,7 @@ export const Path = memo(
                     )}
                     style={{
                         transform: `translate(${x}px, ${y}px)`,
-                        transition: "none",
+                        transition: "none !important",
                     }}
                     fill={fill}
                     stroke={stroke || "transparent"}

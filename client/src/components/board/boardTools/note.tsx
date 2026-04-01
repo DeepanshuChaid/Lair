@@ -40,7 +40,7 @@ export const Note = memo(
                     style={{
                         outline: selectionColor ? `1px solid ${selectionColor}` : "none",
                         backgroundColor: fill ? ColorToCss(fill) : "#000",
-                        transition: "none", // Prevent jitter during manual DOM moves
+                        transition: "none !important", // Prevent jitter during manual DOM moves
                     }}
                     className="shadow-md drop-shadow-xl"
                 >

@@ -36,7 +36,7 @@ export const Text = memo(
                     onPointerDown={(e) => onPointerDown(e, id)}
                     style={{
                         outline: selectionColor ? `1px solid ${selectionColor}` : "none",
-                        transition: "none", // Prevent lag during DOM mutation
+                        transition: "none !important", // Prevent lag during DOM mutation
                     }}
                 >
                     <ContentEditable

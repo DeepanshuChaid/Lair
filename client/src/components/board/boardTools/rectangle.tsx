@@ -22,7 +22,7 @@ export const RectangleTool = memo(
           ref={ref} 
           className="drop-shadow-md"
           style={{
-            transition: "none", 
+            transition: "none !important", 
             cursor: "move"
           }}
           id={id}

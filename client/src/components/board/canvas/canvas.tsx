@@ -131,7 +131,7 @@ export default function Canvas({
             }),
           );
         }
-      }, 25),
+      }, 16),
     [],
   );
 
@@ -148,7 +148,7 @@ export default function Canvas({
             }),
           );
         }
-      }, 30),
+      }, 16),
     [],
   );
 
