@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, memo } from "react";
+import { forwardRef, memo, useState } from "react";
 import { Kalam } from "next/font/google";
 import ContentEditable, { ContentEditableEvent } from "react-contenteditable";
 import { cn, ColorToCss, getContrastingTextColor } from "@/lib/utils"; 
@@ -29,6 +29,8 @@ export const Note = memo(
         ({ id, layer, onPointerDown, selectionColor, onValueChange }, ref) => {
             const { x, y, width, height, fill, value } = layer;
 
+            const [isEditing, setIsEditing] = useState(false)
+
             return (
                 <foreignObject
                     ref={ref} // For 120fps dragging logic
@@ -36,7 +38,8 @@ export const Note = memo(
                     y={y}
                     width={width}
                     height={height}
-                    onPointerDown={(e) => onPointerDown(e, id)}
+                    onDoubleClick={() => setIsEditing(true)}
+                    onPointerDown={(e) => {if (!isEditing) onPointerDown(e, id)}}
                     style={{
                         outline: selectionColor ? `1px solid ${selectionColor}` : "none",
                         backgroundColor: fill ? ColorToCss(fill) : "#000",
@@ -46,6 +49,9 @@ export const Note = memo(
                 >
                     <ContentEditable
                         html={value || "Text"} 
+                        disabled={!isEditing}
+                        // in WEB DEV ON BLUS MEANS YOU LOST THE FOCUS ON THE ELEMENT ITS THE OPPOSITE OF ONFOCUS
+                        onBlur={() => setIsEditing(false)}
                         onChange={(e: ContentEditableEvent) => onValueChange(e.target.value)}
                         className={cn(
                             "h-full w-full flex items-center justify-center text-center outline-none",
@@ -54,6 +60,8 @@ export const Note = memo(
                         style={{
                             fontSize: calculateFontSize(width, height),
                             color: fill ? getContrastingTextColor(fill) : "#fff", 
+                            userSelect: isEditing ? "text" : "none",
+                            pointerEvents: isEditing ? "all" : "none",
                         }}
                     />
                 </foreignObject>

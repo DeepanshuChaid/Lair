@@ -307,7 +307,7 @@ export default function Board() {
               setSelection([id])
 
               dragStartLayersRef.current.set(id, {x: layer.x, y: layer.y})
-              console.log("COORDS OF THE SHAPE IN THE STARTING", dragStartLayersRef.current.get(id))
+              // console.log("COORDS OF THE SHAPE IN THE STARTING", dragStartLayersRef.current.get(id))
 
               // CURRENT REFERS TO THE CURRENT COORDS OF THE CURSOR IN THE SVG WORLD
               setCanvasState({mode: CanvasMode.Translating, current: {x: coords.x, y: coords.y}})
