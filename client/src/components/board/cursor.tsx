@@ -34,7 +34,7 @@ const Cursor = memo(({ x, y, name, connectionId }: CursorProps) => {
       height={50}
       width={name.length * 10 + 24}
       className="relative drop-shadow-md"
-      style={{ pointerEvents: "none", position: "absolute" }}
+      style={{ pointerEvents: "none", position: "absolute", userSelect: "none" }}
     >
       <MousePointer2
         className="h-5 w-5"

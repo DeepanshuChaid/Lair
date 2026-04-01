@@ -1,4 +1,4 @@
-import { color, Point, Side } from "@/types/canvas";
+import { color, layerType, Point, Side } from "@/types/canvas";
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -94,6 +94,18 @@ export const findLayerByPoint = (x: number, y: number, layers: any[]) => {
   for (let i = layers.length - 1; i >= 0; i--) {
     const layerObj = layers[i];
     const layer = layerObj.layer; // Fixed: Extract the actual layer state!
+
+    if (layer.type === layerType.Path) {
+      // loop through the points. If our cursor is within 15Pixels 
+      // of any points in the drawn line, it counts as a hit!
+      const isHit = layer.points.some((point: number[]) => {
+        const distance = Math.hypot(point[0] - x, point[1] - y)
+        return distance < 15
+      })
+
+      if (isHit) return layerObj.id
+      continue
+    }
     
     if (
       x >= layer.x &&
