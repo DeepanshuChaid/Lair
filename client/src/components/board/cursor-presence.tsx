@@ -4,12 +4,16 @@ import { memo } from 'react';
 import Cursor from './cursor';
 import { useAuth } from '@/providers/auth-provider';
 
-interface CursorPresenceProps {
-    cursors: Record<string, {x: number, y: number, name: string}>;
-}
+import { useCursorStore } from "../../store/use-cursor-store/user-cursor-store"
 
-export const CursorPresence = memo(({ cursors }: CursorPresenceProps) => {
+// interface CursorPresenceProps {
+//     cursors: Record<string, {x: number, y: number, name: string}>;
+// }
+
+export const CursorPresence = memo(() => {
     const {user} = useAuth();
+
+    const cursors = useCursorStore((state) => state.cursors);
 
     return (
         <>

@@ -29,7 +29,8 @@ import { ColorToCss, throttle } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
-import { Layers } from "lucide-react";
+import { useCursorStore } from "../../../store/use-cursor-store/user-cursor-store";
+
 
 export default function Canvas({
   id,
@@ -62,9 +63,11 @@ export default function Canvas({
   });
 
   const { user } = useAuth();
-  const [otherCursors, setOtherCursors] = useState<
-    Record<string, { x: number; y: number; name: string }>
-  >({});
+
+  // const [otherCursors, setOtherCursors] = useState<
+  //   Record<string, { x: number; y: number; name: string }>
+  // >({});
+
   const wsRef = useRef<WebSocket | null>(null);
   const lastSentRef = useRef<number>(0);
 
@@ -94,6 +97,8 @@ export default function Canvas({
   const insertingStartRef = useRef<Point | null>(null);
   const rectIdCounterRef = useRef(0);
   const didInitHistoryRef = useRef(false);
+
+  const updateCursor = useCursorStore((state) => state.updateCursor);
 
   const isDirty = useRef(false);
 
@@ -280,10 +285,8 @@ export default function Canvas({
 
           // 2. Handle Real-time Cursors
           if (data.type === "CURSOR_MOVE") {
-            setOtherCursors((prev) => ({
-              ...prev,
-              [data.userId]: data.content,
-            }));
+            
+            updateCursor(data.userId, data.content);
           }
         };
       } catch (err) {
@@ -1126,7 +1129,7 @@ export default function Canvas({
             isShowingHandles={selection.length === 1}
           />
 
-          <CursorPresence cursors={otherCursors} />
+          <CursorPresence  />
 
           {Object.entries(othersDraftLayers).map(([userId, draft]) => {
             if (!draft) return null;
