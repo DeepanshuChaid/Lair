@@ -1,12 +1,15 @@
 "use client";
 
 import { forwardRef, memo } from "react";
-import { Inter } from "next/font/google";
+import { Kalam } from "next/font/google";
 import ContentEditable, { ContentEditableEvent } from "react-contenteditable";
 import { cn, ColorToCss } from "@/lib/utils";
 import { TextLayer } from "@/types/canvas";
 
-const font = Inter({ subsets: ["latin"] });
+const font = Kalam({
+    subsets: ["latin"],
+    weight: ["700"],
+});
 
 interface TextProps {
     id: string;

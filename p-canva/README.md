@@ -7,3 +7,7 @@ now about how we add layer first add three pointers up, down, move these refers 
 
 2. What is <g> tag and how do we use it? when do we use it?
 ans: <g> is like a div in svg world it works like giving a box to the element in svg. in ellipse it is not neccessary to give x and y to only g we can just give it to ellipse itself means we can give css styling to svg as well.
+
+3. What is record<string, any> ?
+ans: record is just a type in typescript that is used to store key-value pairs. it is like a dictionary or a hash map. it is used to store the layers in our canvas. it is used to store the layers in our canvas. <- my bad for this AI Confusing ahh defination it just means a object with string as id and that string holds the data why is this so usefull cuz it is easily mutable, addable, and deletable instead of using confusing array methods just to change one element. eg: - {id: "layer440", data: {Layer}}
+

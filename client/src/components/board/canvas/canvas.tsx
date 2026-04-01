@@ -30,7 +30,7 @@ import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
 import { useCursorStore } from "../../../store/use-cursor-store/user-cursor-store";
-
+import gsap from "gsap";
 
 export default function Canvas({
   id,
@@ -98,9 +98,8 @@ export default function Canvas({
   const rectIdCounterRef = useRef(0);
   const didInitHistoryRef = useRef(false);
 
+  const layerRefs = useRef(new Map<string, any>());
   const updateCursor = useCursorStore((state) => state.updateCursor);
-
-  const isDirty = useRef(false);
 
   // 2. When a user moves something (onPointerUp)
   const onLayerChange = useCallback(
@@ -119,21 +118,21 @@ export default function Canvas({
   );
 
   // 1. Throttled Cursor Broadcast (50ms is standard for smooth cursors)
-  const throttledCursorMove = useMemo(
-    () =>
-      throttle((x: number, y: number, name: string) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(
-            JSON.stringify({
-              type: "CURSOR_MOVE",
-              content: { x, y, name },
-              userId: user?.id,
-            }),
-          );
-        }
-      }, 16),
-    [],
-  );
+  // const throttledCursorMove = useMemo(
+  //   () =>
+  //     throttle((x: number, y: number, name: string) => {
+  //       if (wsRef.current?.readyState === WebSocket.OPEN) {
+  //         wsRef.current.send(
+  //           JSON.stringify({
+  //             type: "CURSOR_MOVE",
+  //             content: { x, y, name },
+  //             userId: user?.id,
+  //           }),
+  //         );
+  //       }
+  //     }, 16),
+  //   [],
+  // );
 
   // 2. Throttled Layer Update (Keep this slightly faster, e.g., 30ms, for "live" feel)
   const throttledLayerBroadcast = useMemo(
@@ -243,7 +242,7 @@ export default function Canvas({
               });
             });
           }
-
+          
           if (data.type === "DRAFT_LAYER") {
             setOthersDraftLayers((prev) => ({
               ...prev,
@@ -255,27 +254,35 @@ export default function Canvas({
             const idsToDelete = data.content;
             setRectangleLayers((prev) =>
               prev.filter((l) => !idsToDelete.includes(l.id)),
-            );
+            )
           }
 
           if (data.type === "LAYER_MOVE") {
             const id = data.content.id;
+            const node = layerRefs.current.get(id);
 
-            setRectangleLayers((prev) => {
-              const next = prev.map((item) =>
-                item.id === id
-                  ? {
-                      ...item,
-                      layer: {
-                        ...item.layer,
-                        x: data.content.x,
-                        y: data.content.y,
-                      },
-                    }
-                  : item,
-              );
-              return next;
-            });
+            if (node) {
+              const isAttrBased =
+                node.tagName.toLowerCase() === "rect" ||
+                node.tagName.toLowerCase() === "foreignobject";
+
+              if (isAttrBased) {
+                gsap.to(node, {
+                  attr: { x: data.content.x, y: data.content.y },
+                  duration: 0.1,
+                  ease: "power2.out",
+                  overwrite: "auto",
+                });
+              } else {
+                gsap.to(node, {
+                  x: data.content.x,
+                  y: data.content.y,
+                  duration: 0.1,
+                  ease: "power2.out",
+                  overwrite: "auto",
+                });
+              }
+            }
           }
 
           if (data.type === "LAYER_CREATE") {
@@ -521,7 +528,7 @@ export default function Canvas({
       // --- PENCIL FINALIZATION ---
       if (canvasState.mode === CanvasMode.Pencil) {
         if (canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
-          const newId = `path-${rectIdCounterRef.current++}`;
+          const newId = `path-${Math.random().toString(36).substr(2, 9)}`;
           const newLayer = {
             type: layerType.Path,
             x: 0,
@@ -572,7 +579,7 @@ export default function Canvas({
           y = start.y - 50;
         }
 
-        const newId = `layer-${rectIdCounterRef.current++}`;
+        const newId = `layer-${Math.random().toString(36).substr(2, 9)}`;
         const newLayer = {
           type: canvasState.layerType,
           x,
@@ -719,7 +726,7 @@ export default function Canvas({
           // throttledLayerBroadcast(movedLayers);
           const now = Date.now();
           if (
-            now - lastSentMoveRef.current > 16 &&
+            now - lastSentMoveRef.current > 25 &&
             wsRef.current?.readyState === WebSocket.OPEN
           ) {
             lastSentMoveRef.current = now;
@@ -1049,6 +1056,10 @@ export default function Canvas({
                 <RectangleTool
                   key={layerId}
                   id={layerId}
+                  ref={(el) => {
+                    if (el) layerRefs.current.set(layerId, el);
+                    else layerRefs.current.delete(layerId);
+                  }}
                   layer={layer}
                   onPointerDown={onLayerPointerDown}
                   selectionColor={selectionColor}
@@ -1061,6 +1072,10 @@ export default function Canvas({
                 <Ellipse
                   key={layerId}
                   id={layerId}
+                  ref={(el) => {
+                    if (el) layerRefs.current.set(layerId, el);
+                    else layerRefs.current.delete(layerId);
+                  }}
                   layer={layer}
                   onPointerDown={onLayerPointerDown}
                   selectionColor={selectionColor}
@@ -1077,6 +1092,10 @@ export default function Canvas({
                 <Component
                   key={layerId}
                   id={layerId}
+                  ref={(el: any) => {
+                    if (el) layerRefs.current.set(layerId, el);
+                    else layerRefs.current.delete(layerId);
+                  }}
                   layer={layer}
                   onPointerDown={onLayerPointerDown}
                   selectionColor={selectionColor}
@@ -1089,6 +1108,10 @@ export default function Canvas({
               return (
                 <Path
                   key={layerId}
+                  ref={(el) => {
+                    if (el) layerRefs.current.set(layerId, el);
+                    else layerRefs.current.delete(layerId);
+                  }}
                   points={layer.points}
                   onPointerDown={(e) => onLayerPointerDown(e, layerId)}
                   x={layer.x}
