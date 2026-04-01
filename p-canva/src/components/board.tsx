@@ -49,7 +49,8 @@ export default function Board() {
   const [selection, setSelection] = useState<string[]>([])
   const resizingBaseLayersRef = useRef<{id: string, layer: any} | null>(null)
 
-  
+  // HOLDS THE STARTING POSITION OF THE DRAGGED LAYERS
+  const dragStartLayersRef = useRef<Map<string, {x: number, y: number}>>(new Map())
 
   const svgRef = useRef<SVGSVGElement>(null);
   const startPointRef = useRef<Point | null>(null);
@@ -174,17 +175,25 @@ export default function Board() {
         const xDistance = coords.x - canvasState.current.x
         const yDistance = coords.y - canvasState.current.y
 
+        const layerId = selection[0]
+
+        // console.log("COORDS OF THE SHAPE IN THE ENDING", dragStartLayersRef.current.get(layerId))
+
+        const startCoords = dragStartLayersRef.current.get(layerId)
+
+        if (!startCoords) return;
+
         // we add that distance to our layer
         setLayer(prev => 
           prev.map(l => 
             selection.includes(l.id)
-             ? {...l, layer: {...l.layer, x: l.layer.x + xDistance, y: l.layer.y + yDistance}}
+             ? {...l, layer: {...l.layer, x: startCoords?.x + xDistance, y: startCoords?.y + yDistance}}
              : l
             )
         )
 
         // we set the new intial to our current position
-        setCanvasState({mode: CanvasMode.Translating, current: coords})
+        // setCanvasState({mode: CanvasMode.Translating, current: coords})
 
 
       }
@@ -296,6 +305,10 @@ export default function Board() {
               const coords = clientToWorld(e.clientX, e.clientY)
               e.stopPropagation()
               setSelection([id])
+
+              dragStartLayersRef.current.set(id, {x: layer.x, y: layer.y})
+              console.log("COORDS OF THE SHAPE IN THE STARTING", dragStartLayersRef.current.get(id))
+
               // CURRENT REFERS TO THE CURRENT COORDS OF THE CURSOR IN THE SVG WORLD
               setCanvasState({mode: CanvasMode.Translating, current: {x: coords.x, y: coords.y}})
             }
