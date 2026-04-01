@@ -90,3 +90,19 @@ export function throttle(func: Function, limit: number) {
 
 
 
+export const findLayerByPoint = (x: number, y: number, layers: any[]) => {
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const layerObj = layers[i];
+    const layer = layerObj.layer; // Fixed: Extract the actual layer state!
+    
+    if (
+      x >= layer.x &&
+      x <= layer.x + layer.width &&
+      y >= layer.y &&
+      y <= layer.y + layer.height
+    ) {
+      return layerObj.id; // Fixed: return the ID!
+    }
+  }
+  return null;
+};

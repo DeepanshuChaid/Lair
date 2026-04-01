@@ -25,7 +25,7 @@ import { useRouter } from "next/navigation";
 import { RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
-import { ColorToCss, throttle } from "@/lib/utils";
+import { ColorToCss, findLayerByPoint, throttle } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
@@ -443,6 +443,27 @@ export default function Canvas({
     [camera],
   );
 
+  const eraseLayer = useCallback((layerId: string) => {
+    dirtyLayers.current.set(layerId, {layer: null, status: "delete"});
+
+
+    wsRef?.current?.send(JSON.stringify({
+      type: "LAYER_DELETE",
+      content: [layerId],
+      userId: user?.id,
+    }))
+
+    setRectangleLayers(prev => {
+      const next = prev.filter(l => l.id !== layerId)
+
+      saveState(JSON.stringify(next))
+
+      setSelection(selection => selection.filter(id => id !== layerId))
+
+      return next
+    })
+  }, [saveState, dirtyLayers])
+
   // --- POINTER EVENTS ---
   const onSvgPointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
@@ -460,6 +481,13 @@ export default function Canvas({
           pencilPoints: [[coords.x, coords.y, e.pressure || 0.5]],
         });
       }
+
+      if (canvasState.mode === CanvasMode.Eraser) {
+        const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers)
+        if (hitId) eraseLayer(hitId)
+        return
+        
+      }
     },
     [canvasState, clientToWorld],
   );
@@ -467,6 +495,15 @@ export default function Canvas({
   const onSvgPointerMove = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       const coords = clientToWorld(e.clientX, e.clientY);
+
+      // ---- ERASER DRAG ----
+      // e.button === 1 means the user is currently holding left-click while moving
+      if (canvasState.mode === CanvasMode.Eraser && e.buttons === 1) {
+        const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers)
+        if (hitId) eraseLayer(hitId)
+          
+        return
+      }
 
       // FIX: Only update pencil points if we are in Pencil mode AND currently drawing (pencilPoints has data)
       if (
@@ -659,6 +696,8 @@ export default function Canvas({
 
   const onLayerPointerDown = useCallback(
     (e: React.PointerEvent, layerId: string) => {
+      if (canvasState.mode === CanvasMode.Eraser) return; 
+      // prevent selection if i m erasing
       if (
         canvasState.mode === CanvasMode.Inserting ||
         canvasState.mode === CanvasMode.Pencil
@@ -755,6 +794,8 @@ export default function Canvas({
         );
         if (!selectedLayers) return;
       }
+
+
 
       // --- 2. RESIZING LOGIC (The Fixed Part) ---
       else if (
