@@ -9,7 +9,8 @@ import {
     Redo, 
     StickyNote, 
     Square, 
-    Trash2
+    Trash2,
+    Eraser
 } from "lucide-react";
 
 import { ColorPicker } from "../color-picker";
@@ -105,10 +106,10 @@ export default function Toolbar ({
                 />
 
                 <ToolButton 
-                    label="Delete"
-                    icon={Trash2}
-                    onClick={deleteLayers}
-                    isDisabled={!canDelete}
+                    label="Eraser"
+                    icon={Eraser}
+                    isActive={canvasState.mode === CanvasMode.Eraser}
+                    onClick={() => setCanvasState({ mode: CanvasMode.Eraser })}
                 />
             </div>
 

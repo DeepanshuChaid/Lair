@@ -707,25 +707,28 @@ export default function Canvas({
           x: coords.x - canvasState.current.x,
           y: coords.y - canvasState.current.y,
         };
+        const startState = dragStartlayersRef.current;
 
         setRectangleLayers((prev) => {
-          const next = prev.map((item) =>
-            selection.includes(item.id)
+          const next = prev.map((item) => {
+            const startPos = startState.get(item.id);
+            return selection.includes(item.id) && startPos
               ? {
                   ...item,
                   layer: {
                     ...item.layer,
-                    x: item.layer.x + offset.x,
-                    y: item.layer.y + offset.y,
+                    x: startPos.x + offset.x,
+                    y: startPos.y + offset.y,
                   },
                 }
-              : item,
-          );
+              : item;
+          });
 
           const movedLayers = next.filter((l) => selection.includes(l.id));
           // throttledLayerBroadcast(movedLayers);
           const now = Date.now();
           if (
+            movedLayers.length > 0 &&
             now - lastSentMoveRef.current > 25 &&
             wsRef.current?.readyState === WebSocket.OPEN
           ) {
@@ -746,7 +749,6 @@ export default function Canvas({
           return next;
         });
 
-        setCanvasState((prev) => ({ ...prev, current: coords }));
 
         const selectedLayers = rectangleLayers.find(
           (l) => l.id === selection[0],

@@ -35,6 +35,10 @@ export type CanvasState =
         mode: CanvasMode.Pencil;
         pencilPoints?: number[][]; // Add this!
     }
+    |
+    {
+        mode: CanvasMode.Eraser;
+    }
 
 
 export enum CanvasMode {
@@ -44,7 +48,8 @@ export enum CanvasMode {
     Translating,
     Inserting,
     Resizing,
-    Pencil
+    Pencil,
+    Eraser
 }
 
 export type color = {
