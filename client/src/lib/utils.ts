@@ -100,7 +100,7 @@ export const findLayerByPoint = (x: number, y: number, layers: any[]) => {
       // of any points in the drawn line, it counts as a hit!
       const isHit = layer.points.some((point: number[]) => {
         const distance = Math.hypot(point[0] - x, point[1] - y)
-        return distance < 15
+        return distance < 30
       })
 
       if (isHit) return layerObj.id

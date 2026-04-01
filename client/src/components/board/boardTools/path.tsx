@@ -25,8 +25,8 @@ export const Path = memo(
                         getStroke(points, {
                             size: 10,
                             thinning: 0.5,
-                            smoothing: 0.5,
-                            streamline: 0.5,
+                            smoothing: 0.8,
+                            streamline: 0.8,
                         })
                     )}
                     style={{
