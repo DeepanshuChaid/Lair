@@ -1,5 +1,8 @@
-import { getSvgPathFromStroke } from "@/lib/utils";
+"use client";
+
+import { forwardRef, memo } from "react";
 import getStroke from "perfect-freehand";
+import { getSvgPathFromStroke } from "@/lib/utils";
 
 interface PathProps {
     x: number;
@@ -10,25 +13,33 @@ interface PathProps {
     stroke?: string;
 }
 
-export const Path = ({ x, y, points, fill, onPointerDown, stroke }: PathProps) => {
-    return (
-        <path
-            className="drop-shadow-md"
-            onPointerDown={onPointerDown}
-            d={getSvgPathFromStroke(
-                getStroke(points, {
-                    size: 10, // Adjusted size
-                    thinning: 0.5,
-                    smoothing: 0.5,
-                    streamline: 0.5,
-                })
-            )}
-            style={{
-                transform: `translate(${x}px, ${y}px)`,
-            }}
-            fill={fill}
-            stroke={stroke || "transparent"}
-            strokeWidth={1}
-        />
-    );
-};
+export const Path = memo(
+    forwardRef<SVGPathElement, PathProps>(
+        ({ x, y, points, fill, onPointerDown, stroke }, ref) => {
+            return (
+                <path
+                    ref={ref} // Attach ref so we can move the finished path at 120fps
+                    className="drop-shadow-md"
+                    onPointerDown={onPointerDown}
+                    d={getSvgPathFromStroke(
+                        getStroke(points, {
+                            size: 10,
+                            thinning: 0.5,
+                            smoothing: 0.5,
+                            streamline: 0.5,
+                        })
+                    )}
+                    style={{
+                        transform: `translate(${x}px, ${y}px)`,
+                        transition: "none",
+                    }}
+                    fill={fill}
+                    stroke={stroke || "transparent"}
+                    strokeWidth={1}
+                />
+            );
+        }
+    )
+);
+
+Path.displayName = "Path";

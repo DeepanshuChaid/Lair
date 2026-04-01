@@ -22,7 +22,7 @@ import { CursorPresence } from "../cursor-presence";
 import { useAuth } from "@/providers/auth-provider";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Rectangle as RectangleTool } from "../boardTools/rectangle";
+import { RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
 import { ColorToCss, throttle } from "@/lib/utils";
