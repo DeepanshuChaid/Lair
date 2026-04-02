@@ -70,6 +70,7 @@ export default function Canvas({
 
   const wsRef = useRef<WebSocket | null>(null);
   const lastSentRef = useRef<number>(0);
+  const lastSentPencilRef = useRef<number>(0);
 
   const lastSentMoveRef = useRef(0);
 
@@ -526,8 +527,8 @@ export default function Canvas({
 
         const now = Date.now()
 
-        if (now - lastSentRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
-          lastSentRef.current = now;
+        if (now - lastSentPencilRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+          lastSentPencilRef.current = now;
 
           wsRef.current.send(JSON.stringify({
             type: "DRAFT_PENCIL",
