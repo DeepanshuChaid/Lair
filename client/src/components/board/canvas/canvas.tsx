@@ -86,7 +86,7 @@ export default function Canvas({
   >({});
 
   const [otherPencil, setOtherPencil] = useState<
-    Record<string, number[][]> | null
+    Record<string, {points: number[][], color: color}> | null
   >({})
 
   const translatingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>(
@@ -252,7 +252,6 @@ export default function Canvas({
               // when we need to use a var as a key we use [var]
               [data.userId]: data.content,
             }))
-            console.log(data.content)
           }
 
           if (data.type === "LAYER_DELETE") {
@@ -532,7 +531,7 @@ export default function Canvas({
 
           wsRef.current.send(JSON.stringify({
             type: "DRAFT_PENCIL",
-            content: canvasState.pencilPoints,
+            content: {points: canvasState.pencilPoints, color: lastUsedColor},
             userId: user?.id,
           }))
         }
@@ -1198,12 +1197,12 @@ export default function Canvas({
               />
             )}
 
-            {/* SHOWING OTHER DRAWING WITH PENCIL */}
-            {otherPencil && Object.entries(otherPencil).map(([userId, points]) => (
+            {/* SHOWING OTHER PENCIL DRAWING */}
+            {otherPencil && Object.entries(otherPencil).map(([userId, data]) => (
               <Path
                 key={userId}
-                points={points}
-                fill={ColorToCss(lastUsedColor)}
+                points={data.points}
+                fill={ColorToCss(data.color)}
                 x={0}
                 y={0}
               />
