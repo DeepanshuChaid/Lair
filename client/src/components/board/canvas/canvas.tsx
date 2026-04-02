@@ -268,7 +268,7 @@ export default function Canvas({
             const node = layerRefs.current.get(id);
 
             // I DONT THINK I NEED TO EXPLAIN BASICALLY DONT INTERFERE BETWEEN OTHERS MATTERS
-            setSelection([])
+            
 
             if (node) {
               const isAttrBased =
@@ -1221,7 +1221,7 @@ export default function Canvas({
               />
             ))}
 
-          {selection.length > 0 && <SelectionBox
+          <SelectionBox
             bounds={selectionBounds}
             onResizeHandlePointerDown={(corner, bounds) => {
               resizingBaseLayersRef.current = rectangleLayers.map((l) => ({
@@ -1236,7 +1236,7 @@ export default function Canvas({
             }}
             isShowingHandles={selection.length === 1}
             isPath={selection[0]?.charAt(0) === "p"}
-          />}
+          />
 
           <CursorPresence />
 
