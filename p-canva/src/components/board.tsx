@@ -128,6 +128,7 @@ export default function Board() {
       }
 
       if (canvasState.mode === CanvasMode.Pencil) {
+        e.preventDefault();
         setCanvasState({
           mode: CanvasMode.Pencil,
           // we are storing the first coords of the click and pressure point
@@ -347,7 +348,7 @@ export default function Board() {
         onPointerDown={onSvgPointerDown}
         onPointerMove={onSvgPointerMove}
         onPointerUp={onSvgPointerUp}
-        style={{ backgroundColor: "#fff" }}
+        style={{ backgroundColor: "#fff", touchAction: "none" }}
       >
         <g
           style={{
@@ -455,7 +456,7 @@ export default function Board() {
             canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints && (
               <Path 
                 points={canvasState.pencilPoints}
-                fill={ColorToCss(lastUsedColor)}
+                fill="#000"
                 x={0}
                 y={0}
               />

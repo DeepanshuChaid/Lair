@@ -85,6 +85,10 @@ export default function Canvas({
     Record<string, { id: string; layer: any } | null>
   >({});
 
+  const [otherPencil, setOtherPencil] = useState<
+    Record<string, number[][]> | null
+  >({})
+
   const translatingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>(
     [],
   );
@@ -95,7 +99,6 @@ export default function Canvas({
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const insertingStartRef = useRef<Point | null>(null);
-  const rectIdCounterRef = useRef(0);
   const didInitHistoryRef = useRef(false);
 
   const layerRefs = useRef(new Map<string, any>());
@@ -241,6 +244,15 @@ export default function Canvas({
               ...prev,
               [data.userId]: data.content, // null OR layer
             }));
+          }
+
+          if (data.type === "DRAFT_PENCIL") {
+            setOtherPencil(prev => ({
+              ...prev, 
+              // when we need to use a var as a key we use [var]
+              [data.userId]: data.content,
+            }))
+            console.log(data.content)
           }
 
           if (data.type === "LAYER_DELETE") {
@@ -512,6 +524,19 @@ export default function Canvas({
             [coords.x, coords.y, e.pressure || 0.5],
           ],
         }));
+
+        const now = Date.now()
+
+        if (now - lastSentRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+          lastSentRef.current = now;
+
+          wsRef.current.send(JSON.stringify({
+            type: "DRAFT_PENCIL",
+            content: canvasState.pencilPoints,
+            userId: user?.id,
+          }))
+        }
+
       } else if (
         canvasState.mode === CanvasMode.Inserting &&
         insertingStartRef.current
@@ -1172,6 +1197,17 @@ export default function Canvas({
                 y={0}
               />
             )}
+
+            {/* SHOWING OTHER DRAWING WITH PENCIL */}
+            {otherPencil && Object.entries(otherPencil).map(([userId, points]) => (
+              <Path
+                key={userId}
+                points={points}
+                fill={ColorToCss(lastUsedColor)}
+                x={0}
+                y={0}
+              />
+            ))}
 
           <SelectionBox
             bounds={selectionBounds}
