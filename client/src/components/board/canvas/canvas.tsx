@@ -86,9 +86,10 @@ export default function Canvas({
     Record<string, { id: string; layer: any } | null>
   >({});
 
-  const [otherPencil, setOtherPencil] = useState<
-    Record<string, {points: number[][], color: color}> | null
-  >({})
+  const [otherPencil, setOtherPencil] = useState<Record<
+    string,
+    { points: number[][]; color: color }
+  > | null>({});
 
   const translatingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>(
     [],
@@ -239,7 +240,7 @@ export default function Canvas({
               });
             });
           }
-          
+
           if (data.type === "DRAFT_LAYER") {
             setOthersDraftLayers((prev) => ({
               ...prev,
@@ -248,23 +249,26 @@ export default function Canvas({
           }
 
           if (data.type === "DRAFT_PENCIL") {
-            setOtherPencil(prev => ({
-              ...prev, 
+            setOtherPencil((prev) => ({
+              ...prev,
               // when we need to use a var as a key we use [var]
               [data.userId]: data.content,
-            }))
+            }));
           }
 
           if (data.type === "LAYER_DELETE") {
             const idsToDelete = data.content;
             setRectangleLayers((prev) =>
               prev.filter((l) => !idsToDelete.includes(l.id)),
-            )
+            );
           }
 
           if (data.type === "LAYER_MOVE") {
             const id = data.content.id;
             const node = layerRefs.current.get(id);
+
+            // I DONT THINK I NEED TO EXPLAIN BASICALLY DONT INTERFERE BETWEEN OTHERS MATTERS
+            setSelection([])
 
             if (node) {
               const isAttrBased =
@@ -299,7 +303,6 @@ export default function Canvas({
           if (data.type === "CURSOR_MOVE") {
             updateCursor(data.userId, data.content);
           }
-          
         };
       } catch (err) {
         console.error("Socket setup failed:", err);
@@ -448,26 +451,30 @@ export default function Canvas({
     [camera],
   );
 
-  const eraseLayer = useCallback((layerId: string) => {
-    dirtyLayers.current.set(layerId, {layer: null, status: "delete"});
+  const eraseLayer = useCallback(
+    (layerId: string) => {
+      dirtyLayers.current.set(layerId, { layer: null, status: "delete" });
 
+      wsRef?.current?.send(
+        JSON.stringify({
+          type: "LAYER_DELETE",
+          content: [layerId],
+          userId: user?.id,
+        }),
+      );
 
-    wsRef?.current?.send(JSON.stringify({
-      type: "LAYER_DELETE",
-      content: [layerId],
-      userId: user?.id,
-    }))
+      setRectangleLayers((prev) => {
+        const next = prev.filter((l) => l.id !== layerId);
 
-    setRectangleLayers(prev => {
-      const next = prev.filter(l => l.id !== layerId)
+        saveState(JSON.stringify(next));
 
-      saveState(JSON.stringify(next))
+        setSelection((selection) => selection.filter((id) => id !== layerId));
 
-      setSelection(selection => selection.filter(id => id !== layerId))
-
-      return next
-    })
-  }, [saveState, dirtyLayers])
+        return next;
+      });
+    },
+    [saveState, dirtyLayers],
+  );
 
   // --- POINTER EVENTS ---
   const onSvgPointerDown = useCallback(
@@ -488,10 +495,9 @@ export default function Canvas({
       }
 
       if (canvasState.mode === CanvasMode.Eraser) {
-        const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers)
-        if (hitId) eraseLayer(hitId)
-        return
-        
+        const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers);
+        if (hitId) eraseLayer(hitId);
+        return;
       }
     },
     [canvasState, clientToWorld],
@@ -504,10 +510,10 @@ export default function Canvas({
       // ---- ERASER DRAG ----
       // e.button === 1 means the user is currently holding left-click while moving
       if (canvasState.mode === CanvasMode.Eraser && e.buttons === 1) {
-        const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers)
-        if (hitId) eraseLayer(hitId)
+        const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers);
+        if (hitId) eraseLayer(hitId);
 
-        return
+        return;
       }
 
       // FIX: Only update pencil points if we are in Pencil mode AND currently drawing (pencilPoints has data)
@@ -525,18 +531,25 @@ export default function Canvas({
           ],
         }));
 
-        const now = Date.now()
+        const now = Date.now();
 
-        if (now - lastSentPencilRef.current > 16 && wsRef.current?.readyState === WebSocket.OPEN) {
+        if (
+          now - lastSentPencilRef.current > 16 &&
+          wsRef.current?.readyState === WebSocket.OPEN
+        ) {
           lastSentPencilRef.current = now;
 
-          wsRef.current.send(JSON.stringify({
-            type: "DRAFT_PENCIL",
-            content: {points: canvasState.pencilPoints, color: lastUsedColor},
-            userId: user?.id,
-          }))
+          wsRef.current.send(
+            JSON.stringify({
+              type: "DRAFT_PENCIL",
+              content: {
+                points: canvasState.pencilPoints,
+                color: lastUsedColor,
+              },
+              userId: user?.id,
+            }),
+          );
         }
-
       } else if (
         canvasState.mode === CanvasMode.Inserting &&
         insertingStartRef.current
@@ -714,7 +727,7 @@ export default function Canvas({
 
   const onLayerPointerDown = useCallback(
     (e: React.PointerEvent, layerId: string) => {
-      if (canvasState.mode === CanvasMode.Eraser) return; 
+      if (canvasState.mode === CanvasMode.Eraser) return;
       // prevent selection if i m erasing
       if (
         canvasState.mode === CanvasMode.Inserting ||
@@ -806,14 +819,11 @@ export default function Canvas({
           return next;
         });
 
-
         const selectedLayers = rectangleLayers.find(
           (l) => l.id === selection[0],
         );
         if (!selectedLayers) return;
       }
-
-
 
       // --- 2. RESIZING LOGIC (The Fixed Part) ---
       else if (
@@ -1199,8 +1209,9 @@ export default function Canvas({
               />
             )}
 
-            {/* SHOWING OTHER PENCIL DRAWING */}
-            {otherPencil && Object.entries(otherPencil).map(([userId, data]) => (
+          {/* SHOWING OTHER PENCIL DRAWING */}
+          {otherPencil &&
+            Object.entries(otherPencil).map(([userId, data]) => (
               <Path
                 key={userId}
                 points={data.points}
@@ -1210,7 +1221,7 @@ export default function Canvas({
               />
             ))}
 
-          <SelectionBox
+          {selection.length > 0 && <SelectionBox
             bounds={selectionBounds}
             onResizeHandlePointerDown={(corner, bounds) => {
               resizingBaseLayersRef.current = rectangleLayers.map((l) => ({
@@ -1225,9 +1236,9 @@ export default function Canvas({
             }}
             isShowingHandles={selection.length === 1}
             isPath={selection[0]?.charAt(0) === "p"}
-          />
+          />}
 
-          <CursorPresence  />
+          <CursorPresence />
 
           {Object.entries(othersDraftLayers).map(([userId, draft]) => {
             if (!draft) return null;
