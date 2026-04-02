@@ -1,0 +1,27 @@
+# Implement Zustand-based Undo/Redo Store
+
+We will create a highly optimized Zustand store (`useLairStore`) to handle the Canvas state, particularly focusing on `layers`, `layerMap`, and their snapshot-based history for Undo/Redo functionality.
+
+## Proposed Changes
+
+### [NEW] `c:\Users\HP\Downloads\lair\lair\client\src\store\use-lair-store.ts`
+We will create a new Zustand store file holding the entire structural state. 
+
+**Features:**
+- **Store Structure:** 
+  - `layers: string[]` - An array of layer IDs to maintain Z-index (render order).
+  - `layerMap: Map<string, Layer>` - A JavaScript Map for $O(1)$ lookups during high-frequency Canvas updates.
+- **History (Undo/Redo):**
+  - Snapshot arrays: `past` and `future`. We will store full snapshots of `{ layers: string[], layerMap: Map<string, Layer> }` since the user wants a serializable snapshot-based history. Note that storing Map in Zustand is usually fine but can be tricky with serialization/Immer. We can use a standard object `Record<string, Layer>` instead of `Map` if serializability is strictly needed, but the prompt asks for a `Map` so we will use a `Map` but clone it on snapshot creation.
+- **Middleware:** `subscribeWithSelector` is wrapped around the store for high performance React-agnostic subscriptions.
+- **Optimized `updateLayer`:** Takes an `id: string`, a `Partial<Layer>` or `Layer` delta, and an optional `saveToHistory?: boolean`. It will update the `layerMap` without creating a history entry unless specified, and it will handle setting `dirtyLayers` logic if needed (or keep it decoupled).
+
+### [DELETE] `c:\Users\HP\Downloads\lair\lair\client\src\store\history-store\history-store.tsx`
+Since this file is basically empty and serves the same purpose, we will remove it.
+
+## Open Questions
+
+- Should we use `Record<string, Layer>` instead of `Map<string, Layer>` to make Redux devtools and serialization easier, or strictly stick to `Map` (often trickier to track changes with in pure React if passed as references)? I will implement it using `Map` but copying appropriately as requested. 
+- How does `dirtyLayers` interact with this? Typically `dirtyLayers` is a `useRef(new Map())` in the canvas component. Should the store keep its own `dirtyLayers` state, or pass a callback?
+
+Let me know if this plan looks good, and I will proceed to execute it!
