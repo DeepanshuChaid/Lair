@@ -7,6 +7,7 @@ interface SelectionBoxProps {
   bounds: XYMH | null;
   onResizeHandlePointerDown: (corner: Side, initialBounds: XYMH) => void;
   isShowingHandles: boolean;
+  isPath: boolean
 }
 
 const HANDLE_WIDTH = 8; // Slightly larger for better mobile/touch hits
@@ -16,8 +17,10 @@ export const SelectionBox = memo(
     bounds,
     onResizeHandlePointerDown,
     isShowingHandles,
+    isPath
   }: SelectionBoxProps) => {
     if (!bounds) return null;
+    if (isPath) return null;
 
     return (
       <>

@@ -1222,6 +1222,7 @@ export default function Canvas({
               });
             }}
             isShowingHandles={selection.length === 1}
+            isPath={selection[0]?.charAt(0) === "p"}
           />
 
           <CursorPresence  />
