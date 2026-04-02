@@ -25,6 +25,12 @@ export default function ToolBar ({canvasState, setCanvasState}: {canvasState: Ca
             }}>
                 Note
             </button>
+
+            <button className={`p-4 bg-amber-300 ${canvasState.mode === CanvasMode.Pencil ? 'ring-2 ring-blue-500' : ''}`} onClick={() => {
+                setCanvasState({mode: CanvasMode.Pencil})
+            }}>
+                Pencil
+            </button>
         </div>
     )
 }

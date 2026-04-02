@@ -5,6 +5,7 @@ import ContentEditable, { ContentEditableEvent } from "react-contenteditable";
 // Use the better utility functions here
 import { cn, ColorToCss, getContrastingTextColor } from "@/lib/utils"; 
 import { NoteLayer } from "@/types/types";
+import { useState } from "react";
 
 const font = Kalam({
     subsets: ["latin"],
@@ -26,6 +27,7 @@ const calculateFontSize = (width: number, height: number) => {
 
 export default function Note({ id, layer, onPointerDown, selectionColor, onValueChange }: NoteProps) {
     const { x, y, width, height, fill, value } = layer;
+    const [isEditing, setIsEditing] = useState(false)
 
     return (
         <foreignObject 
@@ -33,6 +35,7 @@ export default function Note({ id, layer, onPointerDown, selectionColor, onValue
             y={y}
             width={width}
             height={height}
+            onDoubleClick={() => setIsEditing(true)}
             onPointerDown={(e) => onPointerDown(e, id)}
             style={{
                 outline: selectionColor ? `1px solid ${selectionColor}` : "none",
@@ -42,7 +45,9 @@ export default function Note({ id, layer, onPointerDown, selectionColor, onValue
         >
 
             <ContentEditable 
-                html={value || "Text"} 
+                html={value || "Text"}
+                disabled={!isEditing}
+                onBlur={() => setIsEditing(false)}
                 onChange={(e: ContentEditableEvent) => onValueChange(e.target.value)}
                 className={cn(
                     "h-full w-full flex items-center justify-center text-center outline-none",
@@ -50,7 +55,9 @@ export default function Note({ id, layer, onPointerDown, selectionColor, onValue
                 )}
                 style={{
                     fontSize: calculateFontSize(width, height),
-                    color: fill ? getContrastingTextColor(fill) : "#fff", 
+                    color: fill ? getContrastingTextColor(fill) : "#fff",
+                    cursor: isEditing ? "text" : "default",
+                    userSelect: isEditing ? "auto" : "none",
                 }}
             />
         </foreignObject>

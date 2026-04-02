@@ -17,6 +17,8 @@ import Ellipse from "@/canvasLayers/ellipse";
 import Note from "@/canvasLayers/note";
 import { Text } from "@/canvasLayers/text";
 import { SelectionBox } from "./selection-box";
+import Path from "@/canvasLayers/path";
+import { ColorToCss } from "@/lib/utils";
 
 export default function Board() {
   const [canvasState, setCanvasState] = useState<CanvasState>({
@@ -46,11 +48,13 @@ export default function Board() {
   });
 
   // HOLDS THE LIST OF SELECTED LAYERS
-  const [selection, setSelection] = useState<string[]>([])
-  const resizingBaseLayersRef = useRef<{id: string, layer: any} | null>(null)
+  const [selection, setSelection] = useState<string[]>([]);
+  const resizingBaseLayersRef = useRef<{ id: string; layer: any } | null>(null);
 
   // HOLDS THE STARTING POSITION OF THE DRAGGED LAYERS
-  const dragStartLayersRef = useRef<Map<string, {x: number, y: number}>>(new Map())
+  const dragStartLayersRef = useRef<Map<string, { x: number; y: number }>>(
+    new Map(),
+  );
 
   const svgRef = useRef<SVGSVGElement>(null);
   const startPointRef = useRef<Point | null>(null);
@@ -110,13 +114,26 @@ export default function Board() {
 
   const onSvgPointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
+      e.currentTarget.setPointerCapture(e.pointerId);
       const coords = clientToWorld(e.clientX, e.clientY);
       if (canvasState.mode === CanvasMode.Inserting) {
         startPointRef.current = coords;
       }
 
-      if (canvasState.mode === CanvasMode.None || canvasState.mode === CanvasMode.SelectionNet) {
+      if (
+        canvasState.mode === CanvasMode.None ||
+        canvasState.mode === CanvasMode.SelectionNet
+      ) {
         setSelection([]);
+      }
+
+      if (canvasState.mode === CanvasMode.Pencil) {
+        setCanvasState({
+          mode: CanvasMode.Pencil,
+          // we are storing the first coords of the click and pressure point
+          // pointers like mouse dont have pressure so default medium is 0.5
+          pencilPoints: [[coords.x, coords.y, e.pressure || 0.5]],
+        });
       }
     },
     [canvasState, clientToWorld],
@@ -141,15 +158,22 @@ export default function Board() {
         });
       }
 
-      
-      if (canvasState.mode === CanvasMode.Resizing && canvasState.initialBounds) {
+      if (
+        canvasState.mode === CanvasMode.Resizing &&
+        canvasState.initialBounds
+      ) {
         const { initialBounds, corner } = canvasState;
         const newBounds = { ...initialBounds };
 
         // Horizontal Logic
         if ((corner & Side.left) === Side.left) {
-          newBounds.x = Math.min(coords.x, initialBounds.x + initialBounds.width);
-          newBounds.width = Math.abs(initialBounds.x + initialBounds.width - coords.x);
+          newBounds.x = Math.min(
+            coords.x,
+            initialBounds.x + initialBounds.width,
+          );
+          newBounds.width = Math.abs(
+            initialBounds.x + initialBounds.width - coords.x,
+          );
         } else if ((corner & Side.right) === Side.right) {
           newBounds.x = Math.min(coords.x, initialBounds.x);
           newBounds.width = Math.abs(coords.x - initialBounds.x);
@@ -157,53 +181,106 @@ export default function Board() {
 
         // Vertical Logic
         if ((corner & Side.top) === Side.top) {
-          newBounds.y = Math.min(coords.y, initialBounds.y + initialBounds.height);
-          newBounds.height = Math.abs(initialBounds.y + initialBounds.height - coords.y);
+          newBounds.y = Math.min(
+            coords.y,
+            initialBounds.y + initialBounds.height,
+          );
+          newBounds.height = Math.abs(
+            initialBounds.y + initialBounds.height - coords.y,
+          );
         } else if ((corner & Side.bottom) === Side.bottom) {
           newBounds.y = Math.min(coords.y, initialBounds.y);
           newBounds.height = Math.abs(coords.y - initialBounds.y);
         }
 
         // UPDATE THE ACTUAL LAYER
-        setLayer(prev => prev.map(l => 
-          selection.includes(l.id) ? { ...l, layer: { ...l.layer, ...newBounds } } : l
-        ));
+        setLayer((prev) =>
+          prev.map((l) =>
+            selection.includes(l.id)
+              ? { ...l, layer: { ...l.layer, ...newBounds } }
+              : l,
+          ),
+        );
       }
 
       if (canvasState.mode === CanvasMode.Translating && canvasState.current) {
         // we calculate the distance from initial position to current position
-        const xDistance = coords.x - canvasState.current.x
-        const yDistance = coords.y - canvasState.current.y
+        const xDistance = coords.x - canvasState.current.x;
+        const yDistance = coords.y - canvasState.current.y;
 
-        const layerId = selection[0]
+        const layerId = selection[0];
 
         // console.log("COORDS OF THE SHAPE IN THE ENDING", dragStartLayersRef.current.get(layerId))
 
-        const startCoords = dragStartLayersRef.current.get(layerId)
+        const startCoords = dragStartLayersRef.current.get(layerId);
 
         if (!startCoords) return;
 
         // we add that distance to our layer
-        setLayer(prev => 
-          prev.map(l => 
+        setLayer((prev) =>
+          prev.map((l) =>
             selection.includes(l.id)
-             ? {...l, layer: {...l.layer, x: startCoords?.x + xDistance, y: startCoords?.y + yDistance}}
-             : l
-            )
-        )
+              ? {
+                  ...l,
+                  layer: {
+                    ...l.layer,
+                    x: startCoords?.x + xDistance,
+                    y: startCoords?.y + yDistance,
+                  },
+                }
+              : l,
+          ),
+        );
 
         // we set the new intial to our current position
         // setCanvasState({mode: CanvasMode.Translating, current: coords})
-
-
       }
 
-    }, [lastUsedColor, canvasState, clientToWorld],
+      if (
+        canvasState.mode === CanvasMode.Pencil &&
+        canvasState.pencilPoints &&
+        canvasState.pencilPoints.length >= 1 &&
+        e.buttons === 1
+      ) {
+        // we are jus`t adding points to the canvasState again three values are being added
+        // X coords , Y coords, Pressure
+        setCanvasState((prev) => ({
+          ...prev,
+          pencilPoints: [
+            ...(prev as any)?.pencilPoints,
+            [coords.x, coords.y, e.pressure || 0.5],
+          ],
+        }));
+      }
+    },
+    [lastUsedColor, canvasState, clientToWorld],
   );
 
   const onSvgPointerUp = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       const coords = clientToWorld(e.clientX, e.clientY);
+      e.currentTarget.releasePointerCapture(e.pointerId);
+
+      if (canvasState.mode === CanvasMode.Pencil) {
+        if (canvasState.pencilPoints && canvasState.pencilPoints.length > 0) {
+          const newId = `path-${Math.random().toString(36).substr(2, 9)}`;
+          const newLayer = {
+            type: LayerType.Path,
+            // we are not adding width and height because this is a path not a solid shape
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            fill: lastUsedColor,
+            points: canvasState.pencilPoints
+          }
+
+          setLayer(prev => ([...prev, {id: newId, layer: newLayer}]))
+
+          // WE ARE RESETING THE POINTS AS THE DRAWING IS NOW COMPLETE
+          setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
+        }
+      }
 
       if (canvasState.mode === CanvasMode.Inserting && startPointRef.current) {
         const start = startPointRef.current;
@@ -232,26 +309,33 @@ export default function Board() {
         startPointRef.current = null;
         setDraftLayer(null);
         setCanvasState({ mode: CanvasMode.None });
-      } else if (canvasState.mode === CanvasMode.Resizing || canvasState.mode === CanvasMode.Translating) {
+      } else if (
+        canvasState.mode === CanvasMode.Resizing ||
+        canvasState.mode === CanvasMode.Translating
+      ) {
         // I FKIN WROTE THIS LINE YOU FKIN NIII ... YEAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH!
         setCanvasState({ mode: CanvasMode.None });
       }
-      
     },
     [canvasState, clientToWorld, lastUsedColor],
   );
 
   // WE ARE USING USEMEMO AS THE CALULATIONS ARE HEAVY WHICH WILL LAG THE BROWSER USEMEMO BASICALLY REMEMBERS THE RETURN VALUE
   const selectionBounds = useMemo(() => {
-        const selectedLayers = layers.filter(l => selection.includes(l.id));
-        if (selectedLayers.length === 0) return null;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        selectedLayers.forEach(({ layer }) => {
-            minX = Math.min(minX, layer.x); minY = Math.min(minY, layer.y);
-            maxX = Math.max(maxX, layer.x + layer.width); maxY = Math.max(maxY, layer.y + layer.height);
-        });
-        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-    }, [selection, layers]);
+    const selectedLayers = layers.filter((l) => selection.includes(l.id));
+    if (selectedLayers.length === 0) return null;
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    selectedLayers.forEach(({ layer }) => {
+      minX = Math.min(minX, layer.x);
+      minY = Math.min(minY, layer.y);
+      maxX = Math.max(maxX, layer.x + layer.width);
+      maxY = Math.max(maxY, layer.y + layer.height);
+    });
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }, [selection, layers]);
 
   return (
     <div className="h-screen w-full relative overflow-hidden bg-amber-100">
@@ -263,7 +347,7 @@ export default function Board() {
         onPointerDown={onSvgPointerDown}
         onPointerMove={onSvgPointerMove}
         onPointerUp={onSvgPointerUp}
-        style={{ backgroundColor: "#000" }}
+        style={{ backgroundColor: "#fff" }}
       >
         <g
           style={{
@@ -301,17 +385,23 @@ export default function Board() {
 
           {/* Rendered Layers */}
           {layers.map(({ id, layer }) => {
-            const onPointerDown = (e: React.PointerEvent) =>  {
-              const coords = clientToWorld(e.clientX, e.clientY)
-              e.stopPropagation()
-              setSelection([id])
+            const onPointerDown = (e: React.PointerEvent) => {
+              const coords = clientToWorld(e.clientX, e.clientY);
+              
+              if (canvasState.mode !== CanvasMode.Pencil) {
+                e.stopPropagation();
+                setSelection([id]);
+                dragStartLayersRef.current.set(id, { x: layer.x, y: layer.y });
+                // console.log("COORDS OF THE SHAPE IN THE STARTING", dragStartLayersRef.current.get(id))
 
-              dragStartLayersRef.current.set(id, {x: layer.x, y: layer.y})
-              // console.log("COORDS OF THE SHAPE IN THE STARTING", dragStartLayersRef.current.get(id))
+                // CURRENT REFERS TO THE CURRENT COORDS OF THE CURSOR IN THE SVG WORLD
+                setCanvasState({
+                  mode: CanvasMode.Translating,
+                  current: { x: coords.x, y: coords.y },
+                });
+              }
 
-              // CURRENT REFERS TO THE CURRENT COORDS OF THE CURSOR IN THE SVG WORLD
-              setCanvasState({mode: CanvasMode.Translating, current: {x: coords.x, y: coords.y}})
-            }
+            };
             if (layer.type === LayerType.Rectangle)
               return (
                 <Rectangle
@@ -345,22 +435,49 @@ export default function Board() {
                 />
               );
             }
+
+            if (layer.type === LayerType.Path) {
+              return (
+                <Path
+                  key={id}
+                  onPointerDown={onPointerDown}
+                  points={layer.points}
+                  fill={layer.fill}
+                  x={layer.x}
+                  y={layer.y}
+                />
+              )
+            }
             return null;
           })}
 
+          {
+            canvasState.mode === CanvasMode.Pencil && canvasState.pencilPoints && (
+              <Path 
+                points={canvasState.pencilPoints}
+                fill={ColorToCss(lastUsedColor)}
+                x={0}
+                y={0}
+              />
+            )
+          }
+
+
+
           <SelectionBox
             bounds={selectionBounds}
-
             onResizeHandlerPointerDown={(corner, bounds) => {
-               resizingBaseLayersRef.current = layers.map(l => ({id: l.id, layer: l.layer})) 
+              resizingBaseLayersRef.current = layers.map((l) => ({
+                id: l.id,
+                layer: l.layer,
+              }));
 
-               setCanvasState({
+              setCanvasState({
                 mode: CanvasMode.Resizing,
                 initialBounds: bounds!,
-                corner
-               })
+                corner,
+              });
             }}
-
             isShowingHandles={selection.length === 1}
           />
         </g>

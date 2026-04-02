@@ -189,13 +189,6 @@ export default function Canvas({
               setRectangleLayers(layers);
               // Sync history so the user doesn't "undo" into an empty screen
               saveState(JSON.stringify(layers));
-
-              // Update our counter so new IDs don't collide
-              const maxId = layers.reduce((max, l) => {
-                const num = parseInt(l.id.replace(/^\D+/g, ""));
-                return isNaN(num) ? max : Math.max(max, num);
-              }, 0);
-              rectIdCounterRef.current = maxId + 1;
             }
           }
 
@@ -292,9 +285,9 @@ export default function Canvas({
 
           // 2. Handle Real-time Cursors
           if (data.type === "CURSOR_MOVE") {
-            
             updateCursor(data.userId, data.content);
           }
+          
         };
       } catch (err) {
         console.error("Socket setup failed:", err);
@@ -501,7 +494,7 @@ export default function Canvas({
       if (canvasState.mode === CanvasMode.Eraser && e.buttons === 1) {
         const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers)
         if (hitId) eraseLayer(hitId)
-          
+
         return
       }
 
@@ -1099,6 +1092,7 @@ export default function Canvas({
                 <RectangleTool
                   key={layerId}
                   id={layerId}
+                  // el means the actual element if the el has mounted add it to the map
                   ref={(el) => {
                     if (el) layerRefs.current.set(layerId, el);
                     else layerRefs.current.delete(layerId);
