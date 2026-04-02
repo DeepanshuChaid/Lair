@@ -527,7 +527,7 @@ export default function Canvas({
 
         const now = Date.now()
 
-        if (now - lastSentPencilRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+        if (now - lastSentPencilRef.current > 16 && wsRef.current?.readyState === WebSocket.OPEN) {
           lastSentPencilRef.current = now;
 
           wsRef.current.send(JSON.stringify({
@@ -1042,6 +1042,7 @@ export default function Canvas({
         onClick={() => {
           save();
         }}
+        dirtyLayers={dirtyLayers}
       />
       <Members id={id} />
       <Toolbar
