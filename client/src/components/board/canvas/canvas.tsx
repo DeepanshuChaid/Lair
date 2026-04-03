@@ -456,6 +456,11 @@ export default function Canvas({
 
         setRectangleLayers(prev => [...prev, dupedLayer]);
         setSelection([dupedLayer.id]);
+
+        wsRef.current?.send(JSON.stringify({
+          type: "LAYER_CREATE",
+          content: dupedLayer,
+        }))
       }
     };
 
