@@ -1,33 +1,36 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { Side, XYMH, layerType } from "@/types/canvas";
 
 interface SelectionBoxProps {
   bounds: XYMH | null;
   onResizeHandlePointerDown: (corner: Side, initialBounds: XYMH) => void;
   isShowingHandles: boolean;
-  isPath: boolean
+  isPath: boolean;
+  scale: number
 }
 
-const HANDLE_WIDTH = 8; // Slightly larger for better mobile/touch hits
 
 export const SelectionBox = memo(
   ({
     bounds,
     onResizeHandlePointerDown,
     isShowingHandles,
-    isPath
+    isPath,
+    scale
   }: SelectionBoxProps) => {
     if (!bounds) return null;
     if (isPath) return null;
+
+    const HANDLE_WIDTH = scale > 2 ? scale * 12 : 8; // Slightly larger for better mobile/touch hits
 
     return (
       <>
         {/* Main Selection Border */}
         <rect
           className="fill-transparent stroke-blue-500 stroke-1 pointer-events-none"
-          style={{ transform: `translate(${bounds.x}px, ${bounds.y}px)` }}
+          transform={`translate(${bounds.x}, ${bounds.y})`}
           x={0}
           y={0}
           width={bounds.width}

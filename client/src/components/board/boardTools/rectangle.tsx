@@ -19,15 +19,14 @@ export const RectangleTool = memo(
 
       return (
         <rect
-          ref={ref} 
+          ref={ref}
           className="drop-shadow-md"
           style={{
-            transition: "none !important", 
-            cursor: "move"
+            transition: "none !important",
+            cursor: "move",
           }}
           id={id}
-          x={x}
-          y={y}
+          transform={`translate(${x}, ${y})`}
           height={height}
           width={width}
           strokeWidth={1}

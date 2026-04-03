@@ -1211,9 +1211,9 @@ export default function Canvas({
 
           {/* SHOWING OTHER PENCIL DRAWING */}
           {otherPencil &&
-            Object.entries(otherPencil).map(([userId, data]) => (
+            Object.entries(otherPencil).map(([userId, data], index) => (
               <Path
-                key={userId}
+                key={index}
                 points={data.points}
                 fill={ColorToCss(data.color)}
                 x={0}
@@ -1236,6 +1236,7 @@ export default function Canvas({
             }}
             isShowingHandles={selection.length === 1}
             isPath={selection[0]?.charAt(0) === "p"}
+            scale={camera.scale}
           />
 
           <CursorPresence />

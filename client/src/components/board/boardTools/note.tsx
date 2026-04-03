@@ -32,39 +32,44 @@ export const Note = memo(
             const [isEditing, setIsEditing] = useState(false)
 
             return (
-                <foreignObject
-                    ref={ref} // For 120fps dragging logic
-                    x={x}
-                    y={y}
-                    width={width}
-                    height={height}
-                    onDoubleClick={() => setIsEditing(true)}
-                    onPointerDown={(e) => {if (!isEditing) onPointerDown(e, id)}}
-                    style={{
-                        outline: selectionColor ? `1px solid ${selectionColor}` : "none",
-                        backgroundColor: fill ? ColorToCss(fill) : "#000",
-                        transition: "none !important", // Prevent jitter during manual DOM moves
-                    }}
-                    className="shadow-md drop-shadow-xl"
-                >
-                    <ContentEditable
-                        html={value || "Text"} 
-                        disabled={!isEditing}
-                        // in WEB DEV ON BLUS MEANS YOU LOST THE FOCUS ON THE ELEMENT ITS THE OPPOSITE OF ONFOCUS
-                        onBlur={() => setIsEditing(false)}
-                        onChange={(e: ContentEditableEvent) => onValueChange(e.target.value)}
-                        className={cn(
-                            "h-full w-full flex items-center justify-center text-center outline-none",
-                            font.className
-                        )}
-                        style={{
-                            fontSize: calculateFontSize(width, height),
-                            color: fill ? getContrastingTextColor(fill) : "#fff", 
-                            userSelect: isEditing ? "text" : "none",
-                            pointerEvents: isEditing ? "all" : "none",
-                        }}
-                    />
-                </foreignObject>
+              <foreignObject
+                ref={ref} // For 120fps dragging logic
+                transform={`translate(${x}, ${y})`}
+                width={width}
+                height={height}
+                onDoubleClick={() => setIsEditing(true)}
+                onPointerDown={(e) => {
+                  if (!isEditing) onPointerDown(e, id);
+                }}
+                style={{
+                  outline: selectionColor
+                    ? `1px solid ${selectionColor}`
+                    : "none",
+                  backgroundColor: fill ? ColorToCss(fill) : "#000",
+                  transition: "none !important", // Prevent jitter during manual DOM moves
+                }}
+                className="shadow-md drop-shadow-xl"
+              >
+                <ContentEditable
+                  html={value || "Text"}
+                  disabled={!isEditing}
+                  // in WEB DEV ON BLUS MEANS YOU LOST THE FOCUS ON THE ELEMENT ITS THE OPPOSITE OF ONFOCUS
+                  onBlur={() => setIsEditing(false)}
+                  onChange={(e: ContentEditableEvent) =>
+                    onValueChange(e.target.value)
+                  }
+                  className={cn(
+                    "h-full w-full flex items-center justify-center text-center outline-none",
+                    font.className,
+                  )}
+                  style={{
+                    fontSize: calculateFontSize(width, height),
+                    color: fill ? getContrastingTextColor(fill) : "#fff",
+                    userSelect: isEditing ? "text" : "none",
+                    pointerEvents: isEditing ? "all" : "none",
+                  }}
+                />
+              </foreignObject>
             );
         }
     )
