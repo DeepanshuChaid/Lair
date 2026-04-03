@@ -275,6 +275,35 @@ export default function Canvas({
             }
           }
 
+          if (data.type === "LAYER_RESIZE") {
+            const resized: { id: string; x: number; y: number; width: number; height: number }[] = data.content;
+
+            resized.forEach((item) => {
+              const node = layerRefs.current.get(item.id);
+              if (!node) return;
+
+              const tag = node.tagName.toLowerCase();
+              node.setAttribute("transform", `translate(${item.x}, ${item.y})`);
+
+              if (tag === "rect" || tag === "foreignobject") {
+                node.setAttribute("width", item.width.toString());
+                node.setAttribute("height", item.height.toString());
+
+                if (tag === "foreignobject") {
+                  const div = node.querySelector("div");
+                  if (div) {
+                    div.style.fontSize = Math.min(120, item.height * 0.2) + "px";
+                  }
+                }
+              } else if (tag === "ellipse") {
+                node.setAttribute("cx", (item.width / 2).toString());
+                node.setAttribute("cy", (item.height / 2).toString());
+                node.setAttribute("rx", (item.width / 2).toString());
+                node.setAttribute("ry", (item.height / 2).toString());
+              }
+            });
+          }
+
           if (data.type === "LAYER_CREATE") {
             const newLayer = data.content;
             setRectangleLayers((prev) => [...prev, newLayer]);
@@ -899,7 +928,26 @@ export default function Canvas({
           }
 
           if (resizedLayers.length > 0) {
-            throttledLayerBroadcast(resizedLayers);
+            const now = Date.now();
+            if (
+              now - lastSentMoveRef.current > 25 &&
+              wsRef.current?.readyState === WebSocket.OPEN
+            ) {
+              lastSentMoveRef.current = now;
+              wsRef.current.send(
+                JSON.stringify({
+                  type: "LAYER_RESIZE",
+                  content: resizedLayers.map((l) => ({
+                    id: l.id,
+                    x: l.layer.x,
+                    y: l.layer.y,
+                    width: l.layer.width,
+                    height: l.layer.height,
+                  })),
+                  userId: user?.id,
+                }),
+              );
+            }
           }
         });
       }
