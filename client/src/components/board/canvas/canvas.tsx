@@ -1065,6 +1065,7 @@ export default function Canvas({
           userId: user?.id,
         }),
       );
+      
 
       resizingBaseLayersRef.current = [];
 
