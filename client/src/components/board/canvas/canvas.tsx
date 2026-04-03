@@ -100,6 +100,7 @@ export default function Canvas({
   const [selection, setSelection] = useState<string[]>([]);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const selectionBoxRef = useRef<SVGGElement | null>(null);
   const insertingStartRef = useRef<Point | null>(null);
   const didInitHistoryRef = useRef(false);
 
@@ -773,32 +774,37 @@ export default function Canvas({
 
       // --- 1. TRANSLATING LOGIC ---
       if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
-        const offset = {
-          x: coords.x - canvasState.current.x,
-          y: coords.y - canvasState.current.y,
-        };
-        const startState = dragStartlayersRef.current;
+        requestAnimationFrame(() => {
+          const offset = {
+            x: coords.x - canvasState.current.x,
+            y: coords.y - canvasState.current.y,
+          };
+          const startState = dragStartlayersRef.current;
+          
+          let firstMovedLayer: any = null;
 
-        setRectangleLayers((prev) => {
-          const next = prev.map((item) => {
-            const startPos = startState.get(item.id);
-            return selection.includes(item.id) && startPos
-              ? {
-                  ...item,
-                  layer: {
-                    ...item.layer,
-                    x: startPos.x + offset.x,
-                    y: startPos.y + offset.y,
-                  },
-                }
-              : item;
+          selection.forEach((id) => {
+            const startPos = startState.get(id);
+            if (!startPos) return;
+
+            const newX = startPos.x + offset.x;
+            const newY = startPos.y + offset.y;
+            
+            if (!firstMovedLayer) firstMovedLayer = { id, x: newX, y: newY };
+
+            const node = layerRefs.current.get(id);
+            if (node) {
+              node.setAttribute("transform", `translate(${newX}, ${newY})`);
+            }
           });
 
-          const movedLayers = next.filter((l) => selection.includes(l.id));
-          // throttledLayerBroadcast(movedLayers);
+          if (selectionBoxRef.current) {
+            selectionBoxRef.current.setAttribute("transform", `translate(${offset.x}, ${offset.y})`);
+          }
+
           const now = Date.now();
           if (
-            movedLayers.length > 0 &&
+            firstMovedLayer &&
             now - lastSentMoveRef.current > 25 &&
             wsRef.current?.readyState === WebSocket.OPEN
           ) {
@@ -807,22 +813,16 @@ export default function Canvas({
               JSON.stringify({
                 type: "LAYER_MOVE",
                 content: {
-                  id: selection[0],
-                  x: movedLayers[0].layer.x,
-                  y: movedLayers[0].layer.y,
+                  id: firstMovedLayer.id,
+                  x: firstMovedLayer.x,
+                  y: firstMovedLayer.y,
                 },
                 userId: user?.id,
               }),
             );
           }
-
-          return next;
         });
-
-        const selectedLayers = rectangleLayers.find(
-          (l) => l.id === selection[0],
-        );
-        if (!selectedLayers) return;
+        // Notice we DO NOT return here, so that CURSOR BROADCAST at the bottom still runs.
       }
 
       // --- 2. RESIZING LOGIC (The Fixed Part) ---
@@ -920,14 +920,68 @@ export default function Canvas({
     ],
   );
 
-  const onPointerUp = useCallback(() => {
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
     if (canvasState.mode === CanvasMode.None) return;
 
-    // Capture moving or resizing
-    if (
-      canvasState.mode === CanvasMode.Resizing ||
-      canvasState.mode === CanvasMode.Translating
-    ) {
+    // Capture moving
+    if (canvasState.mode === CanvasMode.Translating) {
+      const coords = clientToWorld(e.clientX, e.clientY);
+      const offset = {
+        x: coords.x - canvasState.current.x,
+        y: coords.y - canvasState.current.y,
+      };
+      const startState = dragStartlayersRef.current;
+
+      const nextLayers = rectangleLayers.map((item) => {
+        const startPos = startState.get(item.id);
+        if (selection.includes(item.id) && startPos) {
+          return {
+            ...item,
+            layer: {
+              ...item.layer,
+              x: startPos.x + offset.x,
+              y: startPos.y + offset.y,
+            },
+          };
+        }
+        return item;
+      });
+
+      setRectangleLayers(nextLayers);
+      saveState(JSON.stringify(nextLayers));
+
+      if (selectionBoxRef.current) {
+        selectionBoxRef.current.removeAttribute("transform");
+      }
+
+      nextLayers.forEach((item) => {
+        if (selection.includes(item.id)) {
+          dirtyLayers.current.set(item.id, {
+            layer: item.layer,
+            status: "update",
+          });
+        }
+      });
+
+      const transformPayload = nextLayers
+        .filter((l) => selection.includes(l.id))
+        .map((l) => ({
+          id: l.id,
+          layer: l.layer,
+        }));
+
+      wsRef.current?.send(
+        JSON.stringify({
+          type: "LAYER_UPDATE_DELTA",
+          content: transformPayload,
+          userId: user?.id,
+        }),
+      );
+
+      translatingBaseLayersRef.current = [];
+    }
+    // Capture resizing
+    else if (canvasState.mode === CanvasMode.Resizing) {
       saveState(JSON.stringify(rectangleLayers));
 
       // Sync the final state of selected layers to the dirty ref
@@ -955,7 +1009,6 @@ export default function Canvas({
         }),
       );
 
-      translatingBaseLayersRef.current = [];
       resizingBaseLayersRef.current = [];
     }
 
@@ -966,7 +1019,7 @@ export default function Canvas({
     ) {
       setCanvasState({ mode: CanvasMode.None });
     }
-  }, [canvasState.mode, rectangleLayers, saveState, selection, dirtyLayers]);
+  }, [canvasState, clientToWorld, rectangleLayers, saveState, selection, dirtyLayers]);
 
   const handleValueChange = useCallback(
     (layerId: string, newValue: string) => {
@@ -1221,23 +1274,25 @@ export default function Canvas({
               />
             ))}
 
-          <SelectionBox
-            bounds={selectionBounds}
-            onResizeHandlePointerDown={(corner, bounds) => {
-              resizingBaseLayersRef.current = rectangleLayers.map((l) => ({
-                id: l.id,
-                layer: { ...l.layer },
-              }));
-              setCanvasState({
-                mode: CanvasMode.Resizing,
-                initialBounds: bounds, // This MUST be selectionBounds
-                corner,
-              });
-            }}
-            isShowingHandles={selection.length === 1}
-            isPath={selection[0]?.charAt(0) === "p"}
-            scale={camera.scale}
-          />
+          <g ref={selectionBoxRef}>
+            <SelectionBox
+              bounds={selectionBounds}
+              onResizeHandlePointerDown={(corner, bounds) => {
+                resizingBaseLayersRef.current = rectangleLayers.map((l) => ({
+                  id: l.id,
+                  layer: { ...l.layer },
+                }));
+                setCanvasState({
+                  mode: CanvasMode.Resizing,
+                  initialBounds: bounds, // This MUST be selectionBounds
+                  corner,
+                });
+              }}
+              isShowingHandles={selection.length === 1}
+              isPath={selection[0]?.charAt(0) === "p"}
+              scale={camera.scale}
+            />
+          </g>
 
           <CursorPresence />
 

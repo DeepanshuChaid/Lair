@@ -45,8 +45,8 @@ export const SelectionBox = memo(
               className="fill-transparent hover:fill-blue-500/20"
               style={{
                 cursor: "ns-resize",
-                transform: `translate(${bounds.x}px, ${bounds.y - HANDLE_WIDTH / 2}px)`,
               }}
+              transform={`translate(${bounds.x}, ${bounds.y - HANDLE_WIDTH / 2})`}
               x={0}
               y={0}
               width={bounds.width}

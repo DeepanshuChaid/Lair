@@ -22,9 +22,8 @@ export const Ellipse = memo(
           ref={ref}
           className="drop-shadow-md"
           onPointerDown={(e) => onPointerDown(e, id)}
+          transform={`translate(${x}, ${y})`}
           style={{
-            // We use transform for the "Direct DOM" drag
-            transform: `translate(${x}px, ${y}px)`,
             transition: "none !important",
           }}
           cx={width / 2}

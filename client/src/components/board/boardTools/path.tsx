@@ -29,8 +29,8 @@ export const Path = memo(
                             streamline: 0.8,
                         })
                     )}
+                    transform={`translate(${x}, ${y})`}
                     style={{
-                        transform: `translate(${x}px, ${y}px)`,
                         transition: "none !important",
                     }}
                     fill={fill}

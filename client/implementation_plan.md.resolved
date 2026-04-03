@@ -1,27 +1,38 @@
-# Implement Zustand-based Undo/Redo Store
+# Smooth Canvas Dragging Implementation Plan
 
-We will create a highly optimized Zustand store (`useLairStore`) to handle the Canvas state, particularly focusing on `layers`, `layerMap`, and their snapshot-based history for Undo/Redo functionality.
+This plan outlines the approach to eliminate React's `setState` bottleneck during layer dragging (translating) and resizing, addressing the "super duper smooth" requirement.
+
+## User Review Required
+> [!IMPORTANT]
+> The current system re-renders the entire canvas on every mouse move when dragging. This plan moves to a direct-DOM-mutation approach using `requestAnimationFrame` and GSAP/DOM APIs during the drag, and only syncs back to React (`setRectangleLayers`) when the pointer is released (`onPointerUp`). I need your approval to modify `Canvas.tsx` to handle this.
 
 ## Proposed Changes
 
-### [NEW] `c:\Users\HP\Downloads\lair\lair\client\src\store\use-lair-store.ts`
-We will create a new Zustand store file holding the entire structural state. 
+### `Canvas.tsx`
 
-**Features:**
-- **Store Structure:** 
-  - `layers: string[]` - An array of layer IDs to maintain Z-index (render order).
-  - `layerMap: Map<string, Layer>` - A JavaScript Map for $O(1)$ lookups during high-frequency Canvas updates.
-- **History (Undo/Redo):**
-  - Snapshot arrays: `past` and `future`. We will store full snapshots of `{ layers: string[], layerMap: Map<string, Layer> }` since the user wants a serializable snapshot-based history. Note that storing Map in Zustand is usually fine but can be tricky with serialization/Immer. We can use a standard object `Record<string, Layer>` instead of `Map` if serializability is strictly needed, but the prompt asks for a `Map` so we will use a `Map` but clone it on snapshot creation.
-- **Middleware:** `subscribeWithSelector` is wrapped around the store for high performance React-agnostic subscriptions.
-- **Optimized `updateLayer`:** Takes an `id: string`, a `Partial<Layer>` or `Layer` delta, and an optional `saveToHistory?: boolean`. It will update the `layerMap` without creating a history entry unless specified, and it will handle setting `dirtyLayers` logic if needed (or keep it decoupled).
+#### [MODIFY] [canvas.tsx](file:///c:/Users/HP/Downloads/lair/lair/client/src/components/board/canvas/canvas.tsx)
+- **Ref-Based Mutability:** 
+  - Stop calling `setRectangleLayers` inside `onPointerMove` when `canvasState.mode === CanvasMode.Translating`.
+  - Instead, retrieve the dragged DOM elements using `layerRefs.current.get(item.id)`.
+- **`requestAnimationFrame` loop:**
+  - Wrap the `onPointerMove` DOM updates inside `requestAnimationFrame` to ensure updates are synchronized with the display refresh rate.
+  - Apply `x` and `y` properties to the elements (using `gsap.set` or direct `setAttribute` for SVGs).
+- **Selection Box Handling:**
+  - Since the `SelectionBox` won't re-render via state, we will assign it a ref (`selectionBoxRef`) and update its `transform` or coordinates synchronously with the dragged items.
+- **WebSocket Throttling:**
+  - Maintain the existing throttled cursor/layer broadcast so remote cursors are still accurately informed of the partial movement.
+- **Finalizing State (onPointerUp):**
+  - In `onPointerUp`, calculate the final resting positions of the layers and perform a single `setRectangleLayers` to synchronize the React state with the visual result.
 
-### [DELETE] `c:\Users\HP\Downloads\lair\lair\client\src\store\history-store\history-store.tsx`
-Since this file is basically empty and serves the same purpose, we will remove it.
+### `SelectionBox.tsx`
+
+#### [MODIFY] [selection-box.tsx](file:///c:/Users/HP/Downloads/lair/lair/client/src/components/board/selection-box.tsx)
+- Update it to forward a ref to its DOM container `<g>` element, allowing `canvas.tsx` to directly mutate its transform during a drag without causing a re-render.
 
 ## Open Questions
+- Do you want to apply this same `refs instead of state` logic immediately to the **resizing** function as well, or just **translating** (dragging) for now? (Resizing is slightly more complex conceptually but uses the same ref-mutation pattern).
 
-- Should we use `Record<string, Layer>` instead of `Map<string, Layer>` to make Redux devtools and serialization easier, or strictly stick to `Map` (often trickier to track changes with in pure React if passed as references)? I will implement it using `Map` but copying appropriately as requested. 
-- How does `dirtyLayers` interact with this? Typically `dirtyLayers` is a `useRef(new Map())` in the canvas component. Should the store keep its own `dirtyLayers` state, or pass a callback?
-
-Let me know if this plan looks good, and I will proceed to execute it!
+## Verification Plan
+1. Start dragging a complex set of layers (e.g. 5+ rectangles).
+2. Measure FPS or visually confirm that React dev tools do not highlight a full canvas re-render on every pixel moved.
+3. Validate that releasing the mouse click correctly plots the final position into history and the real state.
