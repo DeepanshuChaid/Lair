@@ -191,7 +191,6 @@ export default function Canvas({
           if (data.type === "init_state") {
             const layers = data.content;
             if (Array.isArray(layers)) {
-              console.log(layers);
               setRectangleLayers(layers);
               // Sync history so the user doesn't "undo" into an empty screen
               saveState(JSON.stringify(layers));
@@ -863,30 +862,64 @@ export default function Canvas({
 
         const startLayers = resizingBaseLayersRef.current;
 
-        setRectangleLayers((prev) => {
-          const next = prev.map((item) => {
-            if (!selection.includes(item.id)) return item;
+        requestAnimationFrame(() => {
+          let resizedLayers: any[] = [];
 
-            const startItem = startLayers.find((l: any) => l.id === item.id);
-            if (!startItem) return item;
+          selection.forEach((id) => {
+            const startItem = startLayers.find((l: any) => l.id === id);
+            if (!startItem) return;
 
-            return {
-              ...item,
+            const itemNewX = newX + (startItem.layer.x - initialBounds.x) * scaleX;
+            const itemNewY = newY + (startItem.layer.y - initialBounds.y) * scaleY;
+            const itemNewW = startItem.layer.width * scaleX;
+            const itemNewH = startItem.layer.height * scaleY;
+
+            resizedLayers.push({
+              id,
               layer: {
-                ...item.layer,
-                x: newX + (startItem.layer.x - initialBounds.x) * scaleX,
-                y: newY + (startItem.layer.y - initialBounds.y) * scaleY,
-                width: startItem.layer.width * scaleX,
-                height: startItem.layer.height * scaleY,
+                ...startItem.layer,
+                x: itemNewX,
+                y: itemNewY,
+                width: itemNewW,
+                height: itemNewH,
               },
-            };
+            });
+
+            const node = layerRefs.current.get(id);
+            if (node) {
+              const tag = node.tagName.toLowerCase();
+              node.setAttribute("transform", `translate(${itemNewX}, ${itemNewY})`);
+
+              if (tag === "rect" || tag === "foreignobject") {
+                node.setAttribute("width", itemNewW.toString());
+                node.setAttribute("height", itemNewH.toString());
+
+                if (tag === "foreignobject") {
+                  const div = node.querySelector("div");
+                  if (div) {
+                    div.style.fontSize = Math.min(120, itemNewH * 0.2) + "px";
+                  }
+                }
+              } else if (tag === "ellipse") {
+                node.setAttribute("cx", (itemNewW / 2).toString());
+                node.setAttribute("cy", (itemNewH / 2).toString());
+                node.setAttribute("rx", (itemNewW / 2).toString());
+                node.setAttribute("ry", (itemNewH / 2).toString());
+              }
+            }
           });
 
-          // Broadcast the resized layers
-          const resizedLayers = next.filter((l) => selection.includes(l.id));
-          throttledLayerBroadcast(resizedLayers);
+          // Update Selection Box dynamically
+          if (selectionBoxRef.current) {
+            selectionBoxRef.current.style.setProperty("--sel-x", `${newX}px`);
+            selectionBoxRef.current.style.setProperty("--sel-y", `${newY}px`);
+            selectionBoxRef.current.style.setProperty("--sel-w", `${newWidth}px`);
+            selectionBoxRef.current.style.setProperty("--sel-h", `${newHeight}px`);
+          }
 
-          return next;
+          if (resizedLayers.length > 0) {
+            throttledLayerBroadcast(resizedLayers);
+          }
         });
       }
 
@@ -1088,10 +1121,6 @@ export default function Canvas({
   );
 
   const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
-
-  useEffect(() => {
-    console.log(rectangleLayers);
-  }, []);
 
   return (
     <main

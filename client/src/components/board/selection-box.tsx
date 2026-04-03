@@ -30,11 +30,13 @@ export const SelectionBox = memo(
         {/* Main Selection Border */}
         <rect
           className="fill-transparent stroke-blue-500 stroke-1 pointer-events-none"
-          transform={`translate(${bounds.x}, ${bounds.y})`}
           x={0}
           y={0}
-          width={bounds.width}
-          height={bounds.height}
+          style={{
+            transform: `translate(var(--sel-x, ${bounds.x}px), var(--sel-y, ${bounds.y}px))`,
+            width: `var(--sel-w, ${bounds.width}px)`,
+            height: `var(--sel-h, ${bounds.height}px)`,
+          }}
         />
 
         {isShowingHandles && (
@@ -45,12 +47,12 @@ export const SelectionBox = memo(
               className="fill-transparent hover:fill-blue-500/20"
               style={{
                 cursor: "ns-resize",
+                transform: `translate(var(--sel-x, ${bounds.x}px), calc(var(--sel-y, ${bounds.y}px) - ${HANDLE_WIDTH / 2}px))`,
+                width: `var(--sel-w, ${bounds.width}px)`,
+                height: `${HANDLE_WIDTH}px`,
               }}
-              transform={`translate(${bounds.x}, ${bounds.y - HANDLE_WIDTH / 2})`}
               x={0}
               y={0}
-              width={bounds.width}
-              height={HANDLE_WIDTH}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 onResizeHandlePointerDown(Side.top, bounds);
@@ -61,12 +63,12 @@ export const SelectionBox = memo(
               className="fill-transparent hover:fill-blue-500/20"
               style={{
                 cursor: "ns-resize",
-                transform: `translate(${bounds.x}px, ${bounds.y + bounds.height - HANDLE_WIDTH / 2}px)`,
+                transform: `translate(var(--sel-x, ${bounds.x}px), calc(var(--sel-y, ${bounds.y}px) + var(--sel-h, ${bounds.height}px) - ${HANDLE_WIDTH / 2}px))`,
+                width: `var(--sel-w, ${bounds.width}px)`,
+                height: `${HANDLE_WIDTH}px`,
               }}
               x={0}
               y={0}
-              width={bounds.width}
-              height={HANDLE_WIDTH}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 onResizeHandlePointerDown(Side.bottom, bounds);
@@ -77,12 +79,12 @@ export const SelectionBox = memo(
               className="fill-transparent hover:fill-blue-500/20"
               style={{
                 cursor: "ew-resize",
-                transform: `translate(${bounds.x - HANDLE_WIDTH / 2}px, ${bounds.y}px)`,
+                transform: `translate(calc(var(--sel-x, ${bounds.x}px) - ${HANDLE_WIDTH / 2}px), var(--sel-y, ${bounds.y}px))`,
+                width: `${HANDLE_WIDTH}px`,
+                height: `var(--sel-h, ${bounds.height}px)`,
               }}
               x={0}
               y={0}
-              width={HANDLE_WIDTH}
-              height={bounds.height}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 onResizeHandlePointerDown(Side.left, bounds);
@@ -93,12 +95,12 @@ export const SelectionBox = memo(
               className="fill-transparent hover:fill-blue-500/20"
               style={{
                 cursor: "ew-resize",
-                transform: `translate(${bounds.x + bounds.width - HANDLE_WIDTH / 2}px, ${bounds.y}px)`,
+                transform: `translate(calc(var(--sel-x, ${bounds.x}px) + var(--sel-w, ${bounds.width}px) - ${HANDLE_WIDTH / 2}px), var(--sel-y, ${bounds.y}px))`,
+                width: `${HANDLE_WIDTH}px`,
+                height: `var(--sel-h, ${bounds.height}px)`,
               }}
               x={0}
               y={0}
-              width={HANDLE_WIDTH}
-              height={bounds.height}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 onResizeHandlePointerDown(Side.right, bounds);
@@ -112,7 +114,7 @@ export const SelectionBox = memo(
                 cursor: "nwse-resize",
                 width: `${HANDLE_WIDTH}px`,
                 height: `${HANDLE_WIDTH}px`,
-                transform: `translate(${bounds.x - HANDLE_WIDTH / 2}px, ${bounds.y - HANDLE_WIDTH / 2}px)`,
+                transform: `translate(calc(var(--sel-x, ${bounds.x}px) - ${HANDLE_WIDTH / 2}px), calc(var(--sel-y, ${bounds.y}px) - ${HANDLE_WIDTH / 2}px))`,
               }}
               onPointerDown={(e) => {
                 e.stopPropagation();
@@ -125,7 +127,7 @@ export const SelectionBox = memo(
                 cursor: "nesw-resize",
                 width: `${HANDLE_WIDTH}px`,
                 height: `${HANDLE_WIDTH}px`,
-                transform: `translate(${bounds.x + bounds.width - HANDLE_WIDTH / 2}px, ${bounds.y - HANDLE_WIDTH / 2}px)`,
+                transform: `translate(calc(var(--sel-x, ${bounds.x}px) + var(--sel-w, ${bounds.width}px) - ${HANDLE_WIDTH / 2}px), calc(var(--sel-y, ${bounds.y}px) - ${HANDLE_WIDTH / 2}px))`,
               }}
               onPointerDown={(e) => {
                 e.stopPropagation();
@@ -138,7 +140,7 @@ export const SelectionBox = memo(
                 cursor: "nwse-resize",
                 width: `${HANDLE_WIDTH}px`,
                 height: `${HANDLE_WIDTH}px`,
-                transform: `translate(${bounds.x + bounds.width - HANDLE_WIDTH / 2}px, ${bounds.y + bounds.height - HANDLE_WIDTH / 2}px)`,
+                transform: `translate(calc(var(--sel-x, ${bounds.x}px) + var(--sel-w, ${bounds.width}px) - ${HANDLE_WIDTH / 2}px), calc(var(--sel-y, ${bounds.y}px) + var(--sel-h, ${bounds.height}px) - ${HANDLE_WIDTH / 2}px))`,
               }}
               onPointerDown={(e) => {
                 e.stopPropagation();
@@ -151,7 +153,7 @@ export const SelectionBox = memo(
                 cursor: "nesw-resize",
                 width: `${HANDLE_WIDTH}px`,
                 height: `${HANDLE_WIDTH}px`,
-                transform: `translate(${bounds.x - HANDLE_WIDTH / 2}px, ${bounds.y + bounds.height - HANDLE_WIDTH / 2}px)`,
+                transform: `translate(calc(var(--sel-x, ${bounds.x}px) - ${HANDLE_WIDTH / 2}px), calc(var(--sel-y, ${bounds.y}px) + var(--sel-h, ${bounds.height}px) - ${HANDLE_WIDTH / 2}px))`,
               }}
               onPointerDown={(e) => {
                 e.stopPropagation();
