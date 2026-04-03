@@ -272,6 +272,12 @@ export default function Canvas({
             if (node) {
               const targetTransform = `translate(${data.content.x}, ${data.content.y})`;
               node.setAttribute("transform", targetTransform);
+              if (selectionBoxRef.current) {
+                selectionBoxRef.current.setAttribute(
+                  "transform",
+                  `translate(${data.content.x}, ${data.content.y})`,
+                );
+              }
             }
           }
 
