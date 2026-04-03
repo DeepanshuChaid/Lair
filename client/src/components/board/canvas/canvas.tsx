@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-  useMemo,
-  useLayoutEffect,
-} from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   CanvasMode,
   CanvasState,
@@ -32,12 +25,7 @@ import { useRouter } from "next/navigation";
 import { RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
-import {
-  ColorToCss,
-  duplicateLayer,
-  findLayerByPoint,
-  throttle,
-} from "@/lib/utils";
+import { ColorToCss, duplicateLayer, findLayerByPoint, throttle } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
@@ -356,7 +344,7 @@ export default function Canvas({
           if (data.type === "CURSOR_MOVE") {
             updateCursor(data.userId, data.content);
           }
-        };
+        }
       } catch (err) {
         console.error("Socket setup failed:", err);
       }
@@ -460,21 +448,19 @@ export default function Canvas({
       }
 
       if (e.key === "d" || e.key === "D") {
-        e.preventDefault();
+        e.preventDefault()
         if (selection.length === 0) return;
 
         const dupedLayer = duplicateLayer(selection[0], rectangleLayers);
         if (!dupedLayer) return;
 
-        setRectangleLayers((prev) => [...prev, dupedLayer]);
+        setRectangleLayers(prev => [...prev, dupedLayer]);
         setSelection([dupedLayer.id]);
 
-        wsRef.current?.send(
-          JSON.stringify({
-            type: "LAYER_CREATE",
-            content: dupedLayer,
-          }),
-        );
+        wsRef.current?.send(JSON.stringify({
+          type: "LAYER_CREATE",
+          content: dupedLayer,
+        }))
       }
     };
 
@@ -844,7 +830,7 @@ export default function Canvas({
 
       // --- 1. TRANSLATING LOGIC ---
       if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
-        requestAnimationFrame(() => {
+        // requestAnimationFrame(() => {
           const offset = {
             x: coords.x - canvasState.current.x,
             y: coords.y - canvasState.current.y,
@@ -894,7 +880,7 @@ export default function Canvas({
               }),
             );
           }
-        });
+        // });
         // Notice we DO NOT return here, so that CURSOR BROADCAST at the bottom still runs.
       }
 
@@ -1057,35 +1043,17 @@ export default function Canvas({
     ],
   );
 
-  useLayoutEffect(() => {
-    // Only cleanup when we EXIT translating mode
-    if (
-      canvasState.mode !== CanvasMode.Translating &&
-      selectionBoxRef.current
-    ) {
-      selectionBoxRef.current.removeAttribute("transform");
-      selectionBoxRef.current.style.removeProperty("--sel-x");
-      selectionBoxRef.current.style.removeProperty("--sel-y");
-      selectionBoxRef.current.style.removeProperty("--sel-w");
-      selectionBoxRef.current.style.removeProperty("--sel-h");
-    }
-  }, [canvasState.mode]);
-
   const onPointerUp = useCallback(
     (e: React.PointerEvent) => {
       if (canvasState.mode === CanvasMode.None) return;
 
+      // Capture moving
       if (canvasState.mode === CanvasMode.Translating) {
-        // ✅ Use the LAST offset from onPointerMove, not recalculate
-        // Get it from the DOM transform that's already applied
-        const currentTransform = selectionBoxRef.current?.getAttribute("transform");
-        const match = currentTransform?.match(/translate\(([-\d.]+),\s*([-\d.]+)\)/);
-        
-        const offset = match ? {
-          x: parseFloat(match[1]),
-          y: parseFloat(match[2]),
-        } : { x: 0, y: 0 };
-
+        const coords = clientToWorld(e.clientX, e.clientY);
+        const offset = {
+          x: coords.x - canvasState.current.x,
+          y: coords.y - canvasState.current.y,
+        };
         const startState = dragStartlayersRef.current;
 
         const nextLayers = rectangleLayers.map((item) => {
@@ -1106,7 +1074,7 @@ export default function Canvas({
         setRectangleLayers(nextLayers);
         saveState(JSON.stringify(nextLayers));
 
-        // NOW remove the transform
+        // Reset the outer <g> translate and clear any stale CSS vars
         if (selectionBoxRef.current) {
           selectionBoxRef.current.removeAttribute("transform");
           selectionBoxRef.current.style.removeProperty("--sel-x");
@@ -1115,10 +1083,32 @@ export default function Canvas({
           selectionBoxRef.current.style.removeProperty("--sel-h");
         }
 
+        nextLayers.forEach((item) => {
+          if (selection.includes(item.id)) {
+            dirtyLayers.current.set(item.id, {
+              layer: item.layer,
+              status: "update",
+            });
+          }
+        });
+
+        const transformPayload = nextLayers
+          .filter((l) => selection.includes(l.id))
+          .map((l) => ({
+            id: l.id,
+            layer: l.layer,
+          }));
+
+        wsRef.current?.send(
+          JSON.stringify({
+            type: "LAYER_UPDATE_DELTA",
+            content: transformPayload,
+            userId: user?.id,
+          }),
+        );
+
         translatingBaseLayersRef.current = [];
       }
-
-      
       // Capture resizing — re-compute final positions from the actual final cursor.
       // rectangleLayers is stale (original) because we used DOM mutations during drag.
       else if (canvasState.mode === CanvasMode.Resizing) {
