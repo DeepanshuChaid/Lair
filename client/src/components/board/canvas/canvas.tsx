@@ -31,7 +31,6 @@ import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
 import { useCursorStore } from "../../../store/use-cursor-store/user-cursor-store";
 
-
 export default function Canvas({
   id,
   title,
@@ -98,6 +97,11 @@ export default function Canvas({
 
   // Key is ID
   const [selection, setSelection] = useState<string[]>([]);
+
+  const selectionRef = useRef<string[]>([]);
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const selectionBoxRef = useRef<SVGGElement | null>(null);
@@ -217,6 +221,12 @@ export default function Canvas({
 
               return next;
             });
+
+            // Clear selection if any updated layer is currently selected
+            const updatedIds = deltaLayers.map((l: any) => l.id);
+            setSelection((prevSelection) =>
+              prevSelection.filter((id) => !updatedIds.includes(id)),
+            );
           }
 
           if (data.type === "LAYER_TRANSFORM") {
@@ -258,6 +268,11 @@ export default function Canvas({
 
           if (data.type === "LAYER_DELETE") {
             const idsToDelete = data.content;
+
+            if (selectionRef.current.some((id) => idsToDelete.includes(id))) {
+              setSelection([]);
+            }
+
             setRectangleLayers((prev) =>
               prev.filter((l) => !idsToDelete.includes(l.id)),
             );
@@ -266,6 +281,10 @@ export default function Canvas({
           if (data.type === "LAYER_MOVE") {
             const id = data.content.id;
             const node = layerRefs.current.get(id);
+
+            if (selectionRef.current.includes(id)) {
+              setSelection([]);
+            }
 
             // All layers now use transform="translate(x, y)" — set it directly.
             // The old attr:{x,y} approach was stacking on top of the transform and causing 700px jumps.
@@ -276,7 +295,18 @@ export default function Canvas({
           }
 
           if (data.type === "LAYER_RESIZE") {
-            const resized: { id: string; x: number; y: number; width: number; height: number }[] = data.content;
+            const resized: {
+              id: string;
+              x: number;
+              y: number;
+              width: number;
+              height: number;
+            }[] = data.content;
+
+            const resizedIds = resized.map((r) => r.id);
+            if (selectionRef.current.some((id) => resizedIds.includes(id))) {
+              setSelection([]);
+            }
 
             resized.forEach((item) => {
               const node = layerRefs.current.get(item.id);
@@ -292,7 +322,8 @@ export default function Canvas({
                 if (tag === "foreignobject") {
                   const div = node.querySelector("div");
                   if (div) {
-                    div.style.fontSize = Math.min(120, item.height * 0.2) + "px";
+                    div.style.fontSize =
+                      Math.min(120, item.height * 0.2) + "px";
                   }
                 }
               } else if (tag === "ellipse") {
@@ -789,7 +820,7 @@ export default function Canvas({
             y: coords.y - canvasState.current.y,
           };
           const startState = dragStartlayersRef.current;
-          
+
           let firstMovedLayer: any = null;
 
           selection.forEach((id) => {
@@ -798,7 +829,7 @@ export default function Canvas({
 
             const newX = startPos.x + offset.x;
             const newY = startPos.y + offset.y;
-            
+
             if (!firstMovedLayer) firstMovedLayer = { id, x: newX, y: newY };
 
             const node = layerRefs.current.get(id);
@@ -808,7 +839,10 @@ export default function Canvas({
           });
 
           if (selectionBoxRef.current) {
-            selectionBoxRef.current.setAttribute("transform", `translate(${offset.x}, ${offset.y})`);
+            selectionBoxRef.current.setAttribute(
+              "transform",
+              `translate(${offset.x}, ${offset.y})`,
+            );
           }
 
           const now = Date.now();
@@ -879,8 +913,10 @@ export default function Canvas({
             const startItem = startLayers.find((l: any) => l.id === id);
             if (!startItem) return;
 
-            const itemNewX = newX + (startItem.layer.x - initialBounds.x) * scaleX;
-            const itemNewY = newY + (startItem.layer.y - initialBounds.y) * scaleY;
+            const itemNewX =
+              newX + (startItem.layer.x - initialBounds.x) * scaleX;
+            const itemNewY =
+              newY + (startItem.layer.y - initialBounds.y) * scaleY;
             const itemNewW = startItem.layer.width * scaleX;
             const itemNewH = startItem.layer.height * scaleY;
 
@@ -898,7 +934,10 @@ export default function Canvas({
             const node = layerRefs.current.get(id);
             if (node) {
               const tag = node.tagName.toLowerCase();
-              node.setAttribute("transform", `translate(${itemNewX}, ${itemNewY})`);
+              node.setAttribute(
+                "transform",
+                `translate(${itemNewX}, ${itemNewY})`,
+              );
 
               if (tag === "rect" || tag === "foreignobject") {
                 node.setAttribute("width", itemNewW.toString());
@@ -923,8 +962,14 @@ export default function Canvas({
           if (selectionBoxRef.current) {
             selectionBoxRef.current.style.setProperty("--sel-x", `${newX}px`);
             selectionBoxRef.current.style.setProperty("--sel-y", `${newY}px`);
-            selectionBoxRef.current.style.setProperty("--sel-w", `${newWidth}px`);
-            selectionBoxRef.current.style.setProperty("--sel-h", `${newHeight}px`);
+            selectionBoxRef.current.style.setProperty(
+              "--sel-w",
+              `${newWidth}px`,
+            );
+            selectionBoxRef.current.style.setProperty(
+              "--sel-h",
+              `${newHeight}px`,
+            );
           }
 
           if (resizedLayers.length > 0) {
@@ -982,157 +1027,173 @@ export default function Canvas({
     ],
   );
 
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
-    if (canvasState.mode === CanvasMode.None) return;
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (canvasState.mode === CanvasMode.None) return;
 
-    // Capture moving
-    if (canvasState.mode === CanvasMode.Translating) {
-      const coords = clientToWorld(e.clientX, e.clientY);
-      const offset = {
-        x: coords.x - canvasState.current.x,
-        y: coords.y - canvasState.current.y,
-      };
-      const startState = dragStartlayersRef.current;
+      // Capture moving
+      if (canvasState.mode === CanvasMode.Translating) {
+        const coords = clientToWorld(e.clientX, e.clientY);
+        const offset = {
+          x: coords.x - canvasState.current.x,
+          y: coords.y - canvasState.current.y,
+        };
+        const startState = dragStartlayersRef.current;
 
-      const nextLayers = rectangleLayers.map((item) => {
-        const startPos = startState.get(item.id);
-        if (selection.includes(item.id) && startPos) {
+        const nextLayers = rectangleLayers.map((item) => {
+          const startPos = startState.get(item.id);
+          if (selection.includes(item.id) && startPos) {
+            return {
+              ...item,
+              layer: {
+                ...item.layer,
+                x: startPos.x + offset.x,
+                y: startPos.y + offset.y,
+              },
+            };
+          }
+          return item;
+        });
+
+        setRectangleLayers(nextLayers);
+        saveState(JSON.stringify(nextLayers));
+
+        // Reset the outer <g> translate and clear any stale CSS vars
+        if (selectionBoxRef.current) {
+          selectionBoxRef.current.removeAttribute("transform");
+          selectionBoxRef.current.style.removeProperty("--sel-x");
+          selectionBoxRef.current.style.removeProperty("--sel-y");
+          selectionBoxRef.current.style.removeProperty("--sel-w");
+          selectionBoxRef.current.style.removeProperty("--sel-h");
+        }
+
+        nextLayers.forEach((item) => {
+          if (selection.includes(item.id)) {
+            dirtyLayers.current.set(item.id, {
+              layer: item.layer,
+              status: "update",
+            });
+          }
+        });
+
+        const transformPayload = nextLayers
+          .filter((l) => selection.includes(l.id))
+          .map((l) => ({
+            id: l.id,
+            layer: l.layer,
+          }));
+
+        wsRef.current?.send(
+          JSON.stringify({
+            type: "LAYER_UPDATE_DELTA",
+            content: transformPayload,
+            userId: user?.id,
+          }),
+        );
+
+        translatingBaseLayersRef.current = [];
+      }
+      // Capture resizing — re-compute final positions from the actual final cursor.
+      // rectangleLayers is stale (original) because we used DOM mutations during drag.
+      else if (canvasState.mode === CanvasMode.Resizing) {
+        const coords = clientToWorld(e.clientX, e.clientY);
+        const { initialBounds, corner } = canvasState;
+
+        let newX = initialBounds.x;
+        let newY = initialBounds.y;
+        let newWidth = initialBounds.width;
+        let newHeight = initialBounds.height;
+
+        if ((corner & Side.top) === Side.top) {
+          newY = Math.min(coords.y, initialBounds.y + initialBounds.height);
+          newHeight = Math.abs(
+            initialBounds.y + initialBounds.height - coords.y,
+          );
+        }
+        if ((corner & Side.bottom) === Side.bottom) {
+          newHeight = Math.max(0, coords.y - initialBounds.y);
+        }
+        if ((corner & Side.left) === Side.left) {
+          newX = Math.min(coords.x, initialBounds.x + initialBounds.width);
+          newWidth = Math.abs(initialBounds.x + initialBounds.width - coords.x);
+        }
+        if ((corner & Side.right) === Side.right) {
+          newWidth = Math.max(0, coords.x - initialBounds.x);
+        }
+
+        const scaleX =
+          initialBounds.width !== 0 ? newWidth / initialBounds.width : 1;
+        const scaleY =
+          initialBounds.height !== 0 ? newHeight / initialBounds.height : 1;
+        const startLayers = resizingBaseLayersRef.current;
+
+        const nextLayers = rectangleLayers.map((item) => {
+          if (!selection.includes(item.id)) return item;
+          const startItem = startLayers.find((l: any) => l.id === item.id);
+          if (!startItem) return item;
           return {
             ...item,
             layer: {
               ...item.layer,
-              x: startPos.x + offset.x,
-              y: startPos.y + offset.y,
+              x: newX + (startItem.layer.x - initialBounds.x) * scaleX,
+              y: newY + (startItem.layer.y - initialBounds.y) * scaleY,
+              width: startItem.layer.width * scaleX,
+              height: startItem.layer.height * scaleY,
             },
           };
+        });
+
+        setRectangleLayers(nextLayers);
+        saveState(JSON.stringify(nextLayers));
+
+        nextLayers.forEach((item) => {
+          if (selection.includes(item.id)) {
+            dirtyLayers.current.set(item.id, {
+              layer: item.layer,
+              status: "update",
+            });
+          }
+        });
+
+        const transformPayload = nextLayers
+          .filter((l) => selection.includes(l.id))
+          .map((l) => ({ id: l.id, layer: l.layer }));
+
+        wsRef.current?.send(
+          JSON.stringify({
+            type: "LAYER_UPDATE_DELTA",
+            content: transformPayload,
+            userId: user?.id,
+          }),
+        );
+
+        resizingBaseLayersRef.current = [];
+
+        if (selectionBoxRef.current) {
+          selectionBoxRef.current.style.removeProperty("--sel-x");
+          selectionBoxRef.current.style.removeProperty("--sel-y");
+          selectionBoxRef.current.style.removeProperty("--sel-w");
+          selectionBoxRef.current.style.removeProperty("--sel-h");
         }
-        return item;
-      });
-
-      setRectangleLayers(nextLayers);
-      saveState(JSON.stringify(nextLayers));
-
-      // Reset the outer <g> translate and clear any stale CSS vars
-      if (selectionBoxRef.current) {
-        selectionBoxRef.current.removeAttribute("transform");
-        selectionBoxRef.current.style.removeProperty("--sel-x");
-        selectionBoxRef.current.style.removeProperty("--sel-y");
-        selectionBoxRef.current.style.removeProperty("--sel-w");
-        selectionBoxRef.current.style.removeProperty("--sel-h");
       }
 
-      nextLayers.forEach((item) => {
-        if (selection.includes(item.id)) {
-          dirtyLayers.current.set(item.id, {
-            layer: item.layer,
-            status: "update",
-          });
-        }
-      });
-
-      const transformPayload = nextLayers
-        .filter((l) => selection.includes(l.id))
-        .map((l) => ({
-          id: l.id,
-          layer: l.layer,
-        }));
-
-      wsRef.current?.send(
-        JSON.stringify({
-          type: "LAYER_UPDATE_DELTA",
-          content: transformPayload,
-          userId: user?.id,
-        }),
-      );
-
-      translatingBaseLayersRef.current = [];
-    }
-    // Capture resizing — re-compute final positions from the actual final cursor.
-    // rectangleLayers is stale (original) because we used DOM mutations during drag.
-    else if (canvasState.mode === CanvasMode.Resizing) {
-      const coords = clientToWorld(e.clientX, e.clientY);
-      const { initialBounds, corner } = canvasState;
-
-      let newX = initialBounds.x;
-      let newY = initialBounds.y;
-      let newWidth = initialBounds.width;
-      let newHeight = initialBounds.height;
-
-      if ((corner & Side.top) === Side.top) {
-        newY = Math.min(coords.y, initialBounds.y + initialBounds.height);
-        newHeight = Math.abs(initialBounds.y + initialBounds.height - coords.y);
+      // Reset UI state but keep the tool selected if it's Pencil or Inserting
+      if (
+        canvasState.mode !== CanvasMode.Pencil &&
+        canvasState.mode !== CanvasMode.Inserting
+      ) {
+        setCanvasState({ mode: CanvasMode.None });
       }
-      if ((corner & Side.bottom) === Side.bottom) {
-        newHeight = Math.max(0, coords.y - initialBounds.y);
-      }
-      if ((corner & Side.left) === Side.left) {
-        newX = Math.min(coords.x, initialBounds.x + initialBounds.width);
-        newWidth = Math.abs(initialBounds.x + initialBounds.width - coords.x);
-      }
-      if ((corner & Side.right) === Side.right) {
-        newWidth = Math.max(0, coords.x - initialBounds.x);
-      }
-
-      const scaleX = initialBounds.width !== 0 ? newWidth / initialBounds.width : 1;
-      const scaleY = initialBounds.height !== 0 ? newHeight / initialBounds.height : 1;
-      const startLayers = resizingBaseLayersRef.current;
-
-      const nextLayers = rectangleLayers.map((item) => {
-        if (!selection.includes(item.id)) return item;
-        const startItem = startLayers.find((l: any) => l.id === item.id);
-        if (!startItem) return item;
-        return {
-          ...item,
-          layer: {
-            ...item.layer,
-            x: newX + (startItem.layer.x - initialBounds.x) * scaleX,
-            y: newY + (startItem.layer.y - initialBounds.y) * scaleY,
-            width: startItem.layer.width * scaleX,
-            height: startItem.layer.height * scaleY,
-          },
-        };
-      });
-
-      setRectangleLayers(nextLayers);
-      saveState(JSON.stringify(nextLayers));
-
-      nextLayers.forEach((item) => {
-        if (selection.includes(item.id)) {
-          dirtyLayers.current.set(item.id, { layer: item.layer, status: "update" });
-        }
-      });
-
-      const transformPayload = nextLayers
-        .filter((l) => selection.includes(l.id))
-        .map((l) => ({ id: l.id, layer: l.layer }));
-
-      wsRef.current?.send(
-        JSON.stringify({
-          type: "LAYER_UPDATE_DELTA",
-          content: transformPayload,
-          userId: user?.id,
-        }),
-      );
-      
-
-      resizingBaseLayersRef.current = [];
-
-      if (selectionBoxRef.current) {
-        selectionBoxRef.current.style.removeProperty("--sel-x");
-        selectionBoxRef.current.style.removeProperty("--sel-y");
-        selectionBoxRef.current.style.removeProperty("--sel-w");
-        selectionBoxRef.current.style.removeProperty("--sel-h");
-      }
-    }
-
-    // Reset UI state but keep the tool selected if it's Pencil or Inserting
-    if (
-      canvasState.mode !== CanvasMode.Pencil &&
-      canvasState.mode !== CanvasMode.Inserting
-    ) {
-      setCanvasState({ mode: CanvasMode.None });
-    }
-  }, [canvasState, clientToWorld, rectangleLayers, saveState, selection, dirtyLayers]);
+    },
+    [
+      canvasState,
+      clientToWorld,
+      rectangleLayers,
+      saveState,
+      selection,
+      dirtyLayers,
+    ],
+  );
 
   const handleValueChange = useCallback(
     (layerId: string, newValue: string) => {
