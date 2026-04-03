@@ -25,7 +25,7 @@ import { useRouter } from "next/navigation";
 import { RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
-import { ColorToCss, findLayerByPoint, throttle } from "@/lib/utils";
+import { ColorToCss, duplicateLayer, findLayerByPoint, throttle } from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
@@ -344,7 +344,7 @@ export default function Canvas({
           if (data.type === "CURSOR_MOVE") {
             updateCursor(data.userId, data.content);
           }
-        };
+        }
       } catch (err) {
         console.error("Socket setup failed:", err);
       }
@@ -445,6 +445,17 @@ export default function Canvas({
       if (e.key === "y" || e.key === "Y") {
         e.preventDefault();
         redo();
+      }
+
+      if (e.key === "d" || e.key === "D") {
+        e.preventDefault()
+        if (selection.length === 0) return;
+
+        const dupedLayer = duplicateLayer(selection[0], rectangleLayers);
+        if (!dupedLayer) return;
+
+        setRectangleLayers(prev => [...prev, dupedLayer]);
+        setSelection([dupedLayer.id]);
       }
     };
 

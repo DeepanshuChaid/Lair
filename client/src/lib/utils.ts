@@ -118,3 +118,21 @@ export const findLayerByPoint = (x: number, y: number, layers: any[]) => {
   }
   return null;
 };
+
+
+export function duplicateLayer(layerId: string, layers: any[]): any {
+  const layerData = layers.find(layer => layer.id === layerId);
+  if (!layerData) return null;
+
+  const base = layerData.layer;
+
+  const newId = `layer-${Math.random().toString(36).substr(2, 9)}`;
+
+  const newLayer = {
+    ...base,
+    x: base.x + base.width + 100,
+    y: base.y,
+  };
+
+  return { id: newId, layer: newLayer };
+}
