@@ -25,7 +25,12 @@ import { useRouter } from "next/navigation";
 import { RectangleTool } from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
-import { ColorToCss, duplicateLayer, findLayerByPoint, throttle } from "@/lib/utils";
+import {
+  ColorToCss,
+  duplicateLayer,
+  findLayerByPoint,
+  throttle,
+} from "@/lib/utils";
 import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
@@ -85,7 +90,9 @@ export default function Canvas({
     Record<string, { id: string; layer: any } | null>
   >({});
 
-  const draftElementRef = useRef<SVGSVGElement | null>(null)
+  const otherDraftlayerRef = useRef(new Map<string, any>())
+
+  const draftElementRef = useRef<SVGSVGElement>(null);
 
   const [otherPencil, setOtherPencil] = useState<Record<
     string,
@@ -253,17 +260,37 @@ export default function Canvas({
             });
           }
 
-          if (data.type === "DRAFT_LAYER") {
+          if (data.type === "CREATE_DRAFT") {
             requestAnimationFrame(() => {
               setOthersDraftLayers((prev) => ({
                 ...prev,
                 [data.userId]: data.content, // null OR layer
               }));
-            })
+            });
             // setOthersDraftLayers((prev) => ({
             //   ...prev,
             //   [data.userId]: data.content, // null OR layer
             // }));
+          }
+
+          if (data.type === "DRAFT_UPDATE") {
+            const id = `draft-${data.userId}`
+            const {x, y, width, height} = data.content
+            const node = otherDraftlayerRef.current.get(id)
+            
+            node.setAttribute("transform", `translate(${x}, ${y})`);
+
+            const tag = node.tagName.toLowerCase();
+
+            if (tag === "rect" || tag === "foreignobject") {
+              node.setAttribute("width", width.toString());
+              node.setAttribute("height", height.toString());
+            } else if (tag === "ellipse") {
+              node.setAttribute("cx", (width / 2).toString());
+              node.setAttribute("cy", (height / 2).toString());
+              node.setAttribute("rx", (width / 2).toString());
+              node.setAttribute("ry", (height / 2).toString());
+            }
           }
 
           if (data.type === "DRAFT_PENCIL") {
@@ -352,7 +379,7 @@ export default function Canvas({
           if (data.type === "CURSOR_MOVE") {
             updateCursor(data.userId, data.content);
           }
-        }
+        };
       } catch (err) {
         console.error("Socket setup failed:", err);
       }
@@ -456,19 +483,21 @@ export default function Canvas({
       }
 
       if (e.key === "d" || e.key === "D") {
-        e.preventDefault()
+        e.preventDefault();
         if (selection.length === 0) return;
 
         const dupedLayer = duplicateLayer(selection[0], rectangleLayers);
         if (!dupedLayer) return;
 
-        setRectangleLayers(prev => [...prev, dupedLayer]);
+        setRectangleLayers((prev) => [...prev, dupedLayer]);
         setSelection([dupedLayer.id]);
 
-        wsRef.current?.send(JSON.stringify({
-          type: "LAYER_CREATE",
-          content: dupedLayer,
-        }))
+        wsRef.current?.send(
+          JSON.stringify({
+            type: "LAYER_CREATE",
+            content: dupedLayer,
+          }),
+        );
       }
     };
 
@@ -563,7 +592,7 @@ export default function Canvas({
 
         const draftId = "draft";
 
-        setDraftRectangleLayer({
+        const draft = {
           id: draftId,
           layer: {
             type: canvasState.layerType,
@@ -572,8 +601,17 @@ export default function Canvas({
             width: 0,
             height: 0,
             fill: lastUsedColor,
+            value: "Text",
           },
-        });
+        }
+
+        setDraftRectangleLayer(draft);
+
+        wsRef.current?.send(JSON.stringify({
+          type: "CREATE_DRAFT",
+          content: draft,
+          userId: user?.id
+        }))
       }
 
       if (canvasState.mode === CanvasMode.Eraser) {
@@ -636,18 +674,19 @@ export default function Canvas({
         canvasState.mode === CanvasMode.Inserting &&
         insertingStartRef.current
       ) {
-        // const start = insertingStartRef.current;
-        // const draftLayer = {
-        //   id: "draft",
-        //   layer: {
-        //     type: canvasState.layerType,
-        //     x: Math.min(start.x, coords.x),
-        //     y: Math.min(start.y, coords.y),
-        //     width: Math.abs(coords.x - start.x),
-        //     height: Math.abs(coords.y - start.y),
-        //     fill: lastUsedColor,
-        //   },
-        // };
+        const start = insertingStartRef.current;
+        if (!start) return;
+        const draftLayer = {
+          id: "draft",
+          layer: {
+            type: canvasState.layerType,
+            x: Math.min(start.x, coords.x),
+            y: Math.min(start.y, coords.y),
+            width: Math.abs(coords.x - start.x),
+            height: Math.abs(coords.y - start.y),
+            fill: lastUsedColor,
+          },
+        };
 
         // requestAnimationFrame(() => {
         //   setDraftRectangleLayer(draftLayer);
@@ -655,9 +694,6 @@ export default function Canvas({
 
         const node = draftElementRef.current;
         if (!node) return;
-
-        const start = insertingStartRef.current;
-        if (!start) return;
 
         const x = Math.min(start.x, coords.x);
         const y = Math.min(start.y, coords.y);
@@ -680,21 +716,16 @@ export default function Canvas({
           node.setAttribute("ry", (height / 2).toString());
         }
 
-        // TODO : MAKE THIS AN ARRAY WHAT IF MULTIPLE USER ARE DRAWING
         const now = Date.now();
-        if (
-          now - lastSentMoveRef.current > 30 &&
-          wsRef.current?.readyState === WebSocket.OPEN
-        ) {
+        if (  now - lastSentMoveRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
           lastSentMoveRef.current = now;
-          wsRef.current.send(
-            JSON.stringify({
-              type: "DRAFT_LAYER",
-              // content: draftLayer,
-              userId: user?.id,
-            }),
-          );
+          wsRef.current?.send(JSON.stringify({
+            type: "DRAFT_UPDATE",
+            content: {x, y, width, height},
+            userId: user?.id
+          }))
         }
+
       }
     },
     [canvasState, clientToWorld, lastUsedColor],
@@ -790,7 +821,7 @@ export default function Canvas({
 
         wsRef?.current?.send(
           JSON.stringify({
-            type: "DRAFT_LAYER",
+            type: "CREATE_DRAFT",
             content: null,
           }),
         );
@@ -885,55 +916,55 @@ export default function Canvas({
 
       // --- 1. TRANSLATING LOGIC ---
       if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
-          const offset = {
-            x: coords.x - canvasState.current.x,
-            y: coords.y - canvasState.current.y,
-          };
-          const startState = dragStartlayersRef.current;
+        const offset = {
+          x: coords.x - canvasState.current.x,
+          y: coords.y - canvasState.current.y,
+        };
+        const startState = dragStartlayersRef.current;
 
-          let firstMovedLayer: any = null;
+        let firstMovedLayer: any = null;
 
-          selection.forEach((id) => {
-            const startPos = startState.get(id);
-            if (!startPos) return;
+        selection.forEach((id) => {
+          const startPos = startState.get(id);
+          if (!startPos) return;
 
-            const newX = startPos.x + offset.x;
-            const newY = startPos.y + offset.y;
+          const newX = startPos.x + offset.x;
+          const newY = startPos.y + offset.y;
 
-            if (!firstMovedLayer) firstMovedLayer = { id, x: newX, y: newY };
+          if (!firstMovedLayer) firstMovedLayer = { id, x: newX, y: newY };
 
-            const node = layerRefs.current.get(id);
-            if (node) {
-              node.setAttribute("transform", `translate(${newX}, ${newY})`);
-            }
-          });
-
-          if (selectionBoxRef.current) {
-            selectionBoxRef.current.setAttribute(
-              "transform",
-              `translate(${offset.x}, ${offset.y})`,
-            );
+          const node = layerRefs.current.get(id);
+          if (node) {
+            node.setAttribute("transform", `translate(${newX}, ${newY})`);
           }
+        });
 
-          const now = Date.now();
-          if (
-            firstMovedLayer &&
-            now - lastSentMoveRef.current > 25 &&
-            wsRef.current?.readyState === WebSocket.OPEN
-          ) {
-            lastSentMoveRef.current = now;
-            wsRef.current?.send(
-              JSON.stringify({
-                type: "LAYER_MOVE",
-                content: {
-                  id: firstMovedLayer.id,
-                  x: firstMovedLayer.x,
-                  y: firstMovedLayer.y,
-                },
-                userId: user?.id,
-              }),
-            );
-          }
+        if (selectionBoxRef.current) {
+          selectionBoxRef.current.setAttribute(
+            "transform",
+            `translate(${offset.x}, ${offset.y})`,
+          );
+        }
+
+        const now = Date.now();
+        if (
+          firstMovedLayer &&
+          now - lastSentMoveRef.current > 25 &&
+          wsRef.current?.readyState === WebSocket.OPEN
+        ) {
+          lastSentMoveRef.current = now;
+          wsRef.current?.send(
+            JSON.stringify({
+              type: "LAYER_MOVE",
+              content: {
+                id: firstMovedLayer.id,
+                x: firstMovedLayer.x,
+                y: firstMovedLayer.y,
+              },
+              userId: user?.id,
+            }),
+          );
+        }
         // Notice we DO NOT return here, so that CURSOR BROADCAST at the bottom still runs.
       }
 
@@ -1544,11 +1575,18 @@ export default function Canvas({
 
             const { id, layer } = draft;
 
+            const userDraftId = `draft-${userId}`
+
             if (layer.type === layerType.Ellipse) {
               return (
                 <Ellipse
                   key={userId}
                   id={id}
+                  ref={(el) => {
+                    if (el) {
+                      otherDraftlayerRef.current.set(userDraftId, el)
+                    } else otherDraftlayerRef.current.delete(userDraftId)
+                  }}
                   layer={layer}
                   onPointerDown={() => {}}
                   selectionColor={strokeColor}
@@ -1561,6 +1599,11 @@ export default function Canvas({
                 <Text
                   key={userId}
                   id={id}
+                  ref={(el) => {
+                    if (el) {
+                      otherDraftlayerRef.current.set(userDraftId, el)
+                    } else otherDraftlayerRef.current.delete(userDraftId)
+                  }}
                   layer={layer}
                   onPointerDown={() => {}}
                   selectionColor={strokeColor}
@@ -1574,6 +1617,11 @@ export default function Canvas({
                 <Note
                   key={userId}
                   id={id}
+                  ref={(el) => {
+                    if (el) {
+                      otherDraftlayerRef.current.set(userDraftId, el)
+                    } else otherDraftlayerRef.current.delete(userDraftId)
+                  }}
                   layer={layer}
                   onPointerDown={() => {}}
                   selectionColor={strokeColor}
@@ -1586,6 +1634,11 @@ export default function Canvas({
               <RectangleTool
                 key={userId}
                 id={id}
+                ref={(el) => {
+                  if (el) {
+                    otherDraftlayerRef.current.set(userDraftId, el)
+                  } else otherDraftlayerRef.current.delete(userDraftId)
+                }}
                 layer={layer}
                 onPointerDown={() => {}}
                 selectionColor={strokeColor}

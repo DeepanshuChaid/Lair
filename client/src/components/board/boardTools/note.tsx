@@ -20,7 +20,7 @@ interface NoteProps {
 }
 
 const calculateFontSize = (width: number, height: number) => {
-    const scaleFactor = 0.15;
+    const scaleFactor = 0.2;
     return Math.min(96, height * scaleFactor, width * scaleFactor);
 };
 
@@ -51,9 +51,9 @@ export const Note = memo(
                 className="shadow-md drop-shadow-xl"
               >
                 <ContentEditable
-                  html={value || "Text"}
+                  html={value || "Type..."}
                   disabled={!isEditing}
-                  // in WEB DEV ON BLUS MEANS YOU LOST THE FOCUS ON THE ELEMENT ITS THE OPPOSITE OF ONFOCUS
+                  // in WEB DEV ON BLUR MEANS YOU LOST THE FOCUS ON THE ELEMENT ITS THE OPPOSITE OF ONFOCUS
                   onBlur={() => setIsEditing(false)}
                   onChange={(e: ContentEditableEvent) =>
                     onValueChange(e.target.value)

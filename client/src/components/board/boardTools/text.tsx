@@ -20,7 +20,7 @@ interface TextProps {
 }
 
 const calculateFontSize = (width: number, height: number) => {
-    const scaleFactor = 0.2;
+    const scaleFactor = 0.15;
     return Math.min(120, height * scaleFactor);
 };
 
