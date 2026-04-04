@@ -85,6 +85,8 @@ export default function Canvas({
     Record<string, { id: string; layer: any } | null>
   >({});
 
+  const draftElementRef = useRef<SVGSVGElement | null>(null)
+
   const [otherPencil, setOtherPencil] = useState<Record<
     string,
     { points: number[][]; color: color }
@@ -252,10 +254,16 @@ export default function Canvas({
           }
 
           if (data.type === "DRAFT_LAYER") {
-            setOthersDraftLayers((prev) => ({
-              ...prev,
-              [data.userId]: data.content, // null OR layer
-            }));
+            requestAnimationFrame(() => {
+              setOthersDraftLayers((prev) => ({
+                ...prev,
+                [data.userId]: data.content, // null OR layer
+              }));
+            })
+            // setOthersDraftLayers((prev) => ({
+            //   ...prev,
+            //   [data.userId]: data.content, // null OR layer
+            // }));
           }
 
           if (data.type === "DRAFT_PENCIL") {
@@ -539,15 +547,32 @@ export default function Canvas({
       e.currentTarget.setPointerCapture(e.pointerId);
 
       const coords = clientToWorld(e.clientX, e.clientY);
-      if (canvasState.mode === CanvasMode.Inserting) {
-        insertingStartRef.current = coords;
-      } else if (canvasState.mode === CanvasMode.None) {
+      if (canvasState.mode === CanvasMode.None) {
         setSelection([]);
         setCanvasState({ mode: CanvasMode.SelectionNet, origin: coords });
       } else if (canvasState.mode === CanvasMode.Pencil) {
         setCanvasState({
           mode: CanvasMode.Pencil,
           pencilPoints: [[coords.x, coords.y, e.pressure || 0.5]],
+        });
+      }
+
+      // INITIATING THE DRAFT LAYER AND THEN MUTATING IT DIRECTLY USING USEREF DOM
+      if (canvasState.mode === CanvasMode.Inserting) {
+        insertingStartRef.current = coords;
+
+        const draftId = "draft";
+
+        setDraftRectangleLayer({
+          id: draftId,
+          layer: {
+            type: canvasState.layerType,
+            x: coords.x,
+            y: coords.y,
+            width: 0,
+            height: 0,
+            fill: lastUsedColor,
+          },
         });
       }
 
@@ -611,19 +636,49 @@ export default function Canvas({
         canvasState.mode === CanvasMode.Inserting &&
         insertingStartRef.current
       ) {
+        // const start = insertingStartRef.current;
+        // const draftLayer = {
+        //   id: "draft",
+        //   layer: {
+        //     type: canvasState.layerType,
+        //     x: Math.min(start.x, coords.x),
+        //     y: Math.min(start.y, coords.y),
+        //     width: Math.abs(coords.x - start.x),
+        //     height: Math.abs(coords.y - start.y),
+        //     fill: lastUsedColor,
+        //   },
+        // };
+
+        // requestAnimationFrame(() => {
+        //   setDraftRectangleLayer(draftLayer);
+        // })
+
+        const node = draftElementRef.current;
+        if (!node) return;
+
         const start = insertingStartRef.current;
-        const draftLayer = {
-          id: "draft",
-          layer: {
-            type: canvasState.layerType,
-            x: Math.min(start.x, coords.x),
-            y: Math.min(start.y, coords.y),
-            width: Math.abs(coords.x - start.x),
-            height: Math.abs(coords.y - start.y),
-            fill: lastUsedColor,
-          },
-        };
-        setDraftRectangleLayer(draftLayer);
+        if (!start) return;
+
+        const x = Math.min(start.x, coords.x);
+        const y = Math.min(start.y, coords.y);
+        const width = Math.abs(coords.x - start.x);
+        const height = Math.abs(coords.y - start.y);
+
+        // IMPORTANT: match how your components render internally
+
+        node.setAttribute("transform", `translate(${x}, ${y})`);
+
+        const tag = node.tagName.toLowerCase();
+
+        if (tag === "rect" || tag === "foreignobject") {
+          node.setAttribute("width", width.toString());
+          node.setAttribute("height", height.toString());
+        } else if (tag === "ellipse") {
+          node.setAttribute("cx", (width / 2).toString());
+          node.setAttribute("cy", (height / 2).toString());
+          node.setAttribute("rx", (width / 2).toString());
+          node.setAttribute("ry", (height / 2).toString());
+        }
 
         // TODO : MAKE THIS AN ARRAY WHAT IF MULTIPLE USER ARE DRAWING
         const now = Date.now();
@@ -635,7 +690,7 @@ export default function Canvas({
           wsRef.current.send(
             JSON.stringify({
               type: "DRAFT_LAYER",
-              content: draftLayer,
+              // content: draftLayer,
               userId: user?.id,
             }),
           );
@@ -830,7 +885,6 @@ export default function Canvas({
 
       // --- 1. TRANSLATING LOGIC ---
       if (canvasState.mode === CanvasMode.Translating && selection.length > 0) {
-        // requestAnimationFrame(() => {
           const offset = {
             x: coords.x - canvasState.current.x,
             y: coords.y - canvasState.current.y,
@@ -880,7 +934,6 @@ export default function Canvas({
               }),
             );
           }
-        // });
         // Notice we DO NOT return here, so that CURSOR BROADCAST at the bottom still runs.
       }
 
@@ -1324,6 +1377,7 @@ export default function Canvas({
           {draftRectangleLayer &&
             (draftRectangleLayer.layer.type === layerType.Ellipse ? (
               <Ellipse
+                ref={draftElementRef}
                 id={draftRectangleLayer.id}
                 layer={draftRectangleLayer.layer}
                 onPointerDown={() => {}}
@@ -1331,6 +1385,7 @@ export default function Canvas({
               />
             ) : draftRectangleLayer.layer.type === layerType.Text ? (
               <Text
+                ref={draftElementRef}
                 id={draftRectangleLayer.id}
                 layer={draftRectangleLayer.layer}
                 onPointerDown={() => {}}
@@ -1339,6 +1394,7 @@ export default function Canvas({
               />
             ) : draftRectangleLayer.layer.type === layerType.Note ? (
               <Note
+                ref={draftElementRef}
                 id={draftRectangleLayer.id}
                 layer={draftRectangleLayer.layer}
                 onPointerDown={() => {}}
@@ -1347,6 +1403,7 @@ export default function Canvas({
               />
             ) : (
               <RectangleTool
+                ref={draftElementRef}
                 id={draftRectangleLayer.id}
                 layer={draftRectangleLayer.layer}
                 onPointerDown={() => {}}
