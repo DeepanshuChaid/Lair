@@ -1,176 +1,55 @@
 import { create } from "zustand";
-import { subscribeWithSelector } from "zustand/middleware";
-import { Layer, CanvasState, CanvasMode } from "@/types/canvas";
-
-interface HistorySnapshot {
-  type: "INSERT" | "UPDATE" | "DELETE";
-  layerId: string;
-  oldData?: Layer | null;
-  newdata?: Layer | null;
-}
 
 interface HistoryStore {
-  // Current State
-  layers: string[];
-  layerMap: Record<string, Layer>;
-  canvasState: CanvasState;
+  past: any[]; // Array of your state snapshots
+  future: any[];
 
-  // History State
-  past: HistorySnapshot[];
-  future: HistorySnapshot[];
+  // 1. Record a move
+  pushState: (currentState: any) => void;
 
-  // Actions
-  setCanvasState: (newState: CanvasState) => void;
-  insertLayer: (id: string, layer: Layer, saveToHistory?: boolean) => void;
-  updateLayer: (
-    id: string,
-    partialLayer: Partial<Layer>,
-    saveToHistory?: boolean,
-  ) => void;
-  deleteLayer: (id: string, saveToHistory?: boolean) => void;
-
-  // History actions
-  undo: () => void;
-  redo: () => void;
+  // 2. The Time Travel
+  undo: (currentState: any) => any | null;
+  redo: (currentState: any) => any | null;
 }
 
-export const historyStore = create<HistoryStore>()(
-  subscribeWithSelector((set) => ({
-    // Initial state
-    // HOLDS THE LIST OF IDS OF THE LAYERS
-    layers: [],
-    // THIS IS THE ACTUAL DATA
-    layerMap: {},
-    canvasState: { mode: CanvasMode.None },
-    // THIS IS THE PAST AND FUTURE STACK YOU CAN VISUALISE IT
-    past: [],
-    future: [],
+export const useHistory = create<HistoryStore>((set, get) => ({
+  past: [],
+  future: [],
 
-    setCanvasState: (newState) => {
-      set({ canvasState: newState });
-    },
+  pushState: (currentState) => {
+    set((state) => ({
+      past: [...state.past, currentState],
+      future: [], // New action kills the "future"
+    }));
+  },
 
-    insertLayer: (id, layer, saveToHistory = true) => {
-      set((state) => {
-        const snapshot: HistorySnapshot = {
-          type: "INSERT",
-          layerId: id,
-          newdata: layer,
-        };
+  undo: (currentState) => {
+    const { past } = get();
+    if (past.length === 0) return null;
 
-        return {
-          layers: [...state.layers, id],
-          layerMap: { ...state.layerMap, [id]: layer },
-          past: saveToHistory ? [...state.past, snapshot] : state.past,
-          future: saveToHistory ? [] : state.future,
-        };
-      });
-    },
+    const previous = past[past.length - 1];
+    const newPast = past.slice(0, -1);
 
-    // TRIGGERED WHEN YOU UPDATE A SHAPE (MOVE, RESIZE, CHANGE COLOR ETC)
-    updateLayer: (id, partialLayer, saveToHistory = false) => {
-      set((state) => {
-        const existingLayer = state.layerMap[id];
-        if (!existingLayer) return state;
+    set((state) => ({
+      past: newPast,
+      future: [currentState, ...state.future],
+    }));
 
-        const updatedLayer = { ...existingLayer, ...partialLayer } as Layer;
+    return previous;
+  },
 
-        const snapshot: HistorySnapshot = {
-          type: "UPDATE",
-          layerId: id,
-          oldData: existingLayer,
-          newdata: updatedLayer,
-        };
+  redo: (currentState) => {
+    const { future } = get();
+    if (future.length === 0) return null;
 
-        return {
-          layerMap: { ...state.layerMap, [id]: updatedLayer },
-          past: saveToHistory ? [...state.past, snapshot] : state.past,
-          future: saveToHistory ? [] : state.future,
-        };
-      });
-    },
+    const next = future[0];
+    const newFuture = future.slice(1);
 
-    deleteLayer: (id, saveToHistory = true) => {
-      set((state) => {
-        const existingLayer = state.layerMap[id];
-        if (!existingLayer) return state;
+    set((state) => ({
+      past: [...state.past, currentState],
+      future: newFuture,
+    }));
 
-        const snapshot: HistorySnapshot = {
-          type: "DELETE",
-          layerId: id,
-          oldData: existingLayer,
-        };
-
-        const newLayerMap = { ...state.layerMap };
-        delete newLayerMap[id];
-
-        return {
-          layers: state.layers.filter((lId) => lId !== id),
-          layerMap: newLayerMap,
-          past: saveToHistory ? [...state.past, snapshot] : state.past,
-          future: saveToHistory ? [] : state.future,
-        };
-      });
-    },
-
-    // THIS FUNCTION LOOKS AT THE LAST INDEX OF THE PAST STACK\
-    // IF YOU INESRTED A LAYER IT DELETES THE SPECIFIC ID
-    // IF YOU UPDATED THE LAYER IT LOOKS AT THE OLD DATA IT SAVED AND THAT PUTS THAT SPECIFIC SHAPE BACK TO HOW IT WAS
-    // IF YOU DELETED A LAYER IT GRABS A THE OLD DATA IT SAVED AND PUTS IT BACK TO ON THE LIST
-    undo: () => {
-      set((state) => {
-        if (state.past.length === 0) return state;
-
-        const lastAction = state.past[state.past.length - 1];
-        const newPast = state.past.slice(0, -1);
-        const newLayerMap = { ...state.layerMap };
-        let newLayers = [...state.layers];
-
-        if (lastAction.type === "INSERT") {
-          delete newLayerMap[lastAction.layerId];
-          newLayers = newLayers.filter((id) => id !== lastAction.layerId);
-        } else if (lastAction.type === "UPDATE" && lastAction.oldData) {
-          newLayerMap[lastAction.layerId] = lastAction.oldData;
-        } else if (lastAction.type === "DELETE" && lastAction.oldData) {
-          newLayerMap[lastAction.layerId] = lastAction.oldData;
-          newLayers.push(lastAction.layerId);
-        }
-
-        return {
-          layerMap: newLayerMap,
-          layers: newLayers,
-          past: newPast,
-          future: [lastAction, ...state.future],
-        };
-      });
-    },
-
-    redo: () => {
-      set((state) => {
-        if (state.future.length === 0) return state;
-
-        const nextAction = state.future[0];
-        const newFuture = state.future.slice(1);
-        const newLayerMap = { ...state.layerMap };
-        let newLayers = [...state.layers];
-
-        if (nextAction.type === "INSERT" && nextAction.newdata) {
-          newLayerMap[nextAction.layerId] = nextAction.newdata;
-          newLayers.push(nextAction.layerId);
-        } else if (nextAction.type === "UPDATE" && nextAction.newdata) {
-          newLayerMap[nextAction.layerId] = nextAction.newdata;
-        } else if (nextAction.type === "DELETE") {
-          delete newLayerMap[nextAction.layerId];
-          newLayers = newLayers.filter((id) => id !== nextAction.layerId);
-        }
-
-        return {
-          layerMap: newLayerMap,
-          layers: newLayers,
-          past: [...state.past, nextAction],
-          future: newFuture,
-        };
-      });
-    },
-  })),
-);
+    return next;
+  },
+}));
