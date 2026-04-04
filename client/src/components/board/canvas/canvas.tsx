@@ -35,6 +35,7 @@ import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
 import { useCursorStore } from "../../../store/use-cursor-store/user-cursor-store";
+import { historyStore } from "@/store/history-store/history-store";
 
 export default function Canvas({
   id,
@@ -52,8 +53,6 @@ export default function Canvas({
   const [canvasState, setCanvasState] = useState<CanvasState>({
     mode: CanvasMode.None,
   });
-  const { undo, redo, canUndo, canRedo, saveState, currentState } =
-    useHistory();
 
   const dragStartlayersRef = useRef<Map<string, { x: number; y: number }>>(
     new Map(),
@@ -68,16 +67,6 @@ export default function Canvas({
 
   const { user } = useAuth();
 
-  // const [otherCursors, setOtherCursors] = useState<
-  //   Record<string, { x: number; y: number; name: string }>
-  // >({});
-
-  const wsRef = useRef<WebSocket | null>(null);
-  const lastSentRef = useRef<number>(0);
-  const lastSentPencilRef = useRef<number>(0);
-
-  const lastSentMoveRef = useRef(0);
-
   const [rectangleLayers, setRectangleLayers] = useState<
     Array<{ id: string; layer: any }>
   >([]);
@@ -86,11 +75,69 @@ export default function Canvas({
     layer: any;
   } | null>(null);
 
+  const [history, setHistory] = useState<any[]>([]); // Stack of past states
+  const [redoStack, setRedoStack] = useState<any[]>([]); // Stack of undone states
+
+  // Helper to take a snapshot of current layers before an action starts
+  const recordHistory = useCallback(() => {
+    setHistory((prev) => [...prev, JSON.stringify(rectangleLayers)]);
+    setRedoStack([]); // Clear redo whenever a new action is performed
+  }, [rectangleLayers]);
+
+  const undo = useCallback(() => {
+    if (history.length === 0) return;
+
+    const prevState = history[history.length - 1];
+    const currentState = JSON.stringify(rectangleLayers);
+
+    setRedoStack((prev) => [...prev, currentState]);
+    setHistory((prev) => prev.slice(0, -1));
+
+    const parsedLayers = JSON.parse(prevState);
+    setRectangleLayers(parsedLayers);
+
+    // Broadcast the full state reset to others
+    wsRef.current?.send(
+      JSON.stringify({
+        type: "LAYER_SET_ALL", // You'll need this message type in your backend
+        content: parsedLayers,
+        userId: user?.id,
+      }),
+    );
+  }, [history, rectangleLayers, user?.id]);
+
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+
+    const nextState = redoStack[redoStack.length - 1];
+    const currentState = JSON.stringify(rectangleLayers);
+
+    setHistory((prev) => [...prev, currentState]);
+    setRedoStack((prev) => prev.slice(0, -1));
+
+    const parsedLayers = JSON.parse(nextState);
+    setRectangleLayers(parsedLayers);
+
+    wsRef.current?.send(
+      JSON.stringify({
+        type: "LAYER_SET_ALL",
+        content: parsedLayers,
+        userId: user?.id,
+      }),
+    );
+  }, [redoStack, rectangleLayers, user?.id]);
+
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const lastSentRef = useRef<number>(0);
+  const lastSentPencilRef = useRef<number>(0);
+  const lastSentMoveRef = useRef(0);
+
   const [othersDraftLayers, setOthersDraftLayers] = useState<
     Record<string, { id: string; layer: any } | null>
   >({});
 
-  const otherDraftlayerRef = useRef(new Map<string, any>())
+  const otherDraftlayerRef = useRef(new Map<string, any>());
 
   const draftElementRef = useRef<SVGSVGElement>(null);
 
@@ -188,8 +235,6 @@ export default function Canvas({
             const layers = data.content;
             if (Array.isArray(layers)) {
               setRectangleLayers(layers);
-              // Sync history so the user doesn't "undo" into an empty screen
-              saveState(JSON.stringify(layers));
             }
           }
 
@@ -253,10 +298,10 @@ export default function Canvas({
           }
 
           if (data.type === "DRAFT_UPDATE") {
-            const id = `draft-${data.userId}`
-            const {x, y, width, height} = data.content
-            const node = otherDraftlayerRef.current.get(id)
-            
+            const id = `draft-${data.userId}`;
+            const { x, y, width, height } = data.content;
+            const node = otherDraftlayerRef.current.get(id);
+
             node.setAttribute("transform", `translate(${x}, ${y})`);
 
             const tag = node.tagName.toLowerCase();
@@ -279,7 +324,7 @@ export default function Canvas({
                 // when we need to use a var as a key we use [var]
                 [data.userId]: data.content,
               }));
-            })
+            });
           }
 
           if (data.type === "LAYER_DELETE") {
@@ -387,26 +432,6 @@ export default function Canvas({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [rectangleLayers, id]);
 
-  // --- HISTORY SNAPSHOTS ---
-  useEffect(() => {
-    if (didInitHistoryRef.current) return;
-    didInitHistoryRef.current = true;
-    saveState(JSON.stringify([]));
-  }, [saveState]);
-
-  useEffect(() => {
-    if (currentState === undefined) return;
-    try {
-      const parsed = JSON.parse(currentState);
-      if (Array.isArray(parsed)) setRectangleLayers(parsed);
-    } catch {
-      // Silent fail for malformed history
-    } finally {
-      insertingStartRef.current = null;
-      setDraftRectangleLayer(null);
-    }
-  }, [currentState]);
-
   const deleteLayers = useCallback(() => {
     if (selection.length === 0) return;
 
@@ -428,9 +453,9 @@ export default function Canvas({
     );
 
     setRectangleLayers(nextLayers);
-    saveState(JSON.stringify(nextLayers));
+
     setSelection([]);
-  }, [selection, rectangleLayers, saveState, dirtyLayers]);
+  }, [selection, rectangleLayers, dirtyLayers]);
 
   // --- KEYBOARD SHORTCUTS ---
   useEffect(() => {
@@ -456,11 +481,13 @@ export default function Canvas({
 
       if (e.key === "z" || e.key === "Z") {
         e.preventDefault();
-        undo();
+        // UNDO()
+        historyStore.getState().undo();
       }
       if (e.key === "y" || e.key === "Y") {
         e.preventDefault();
-        redo();
+        // REDO();
+        historyStore.getState().redo();
       }
 
       if (e.key === "d" || e.key === "D") {
@@ -484,7 +511,7 @@ export default function Canvas({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [undo, redo, deleteLayers]);
+  }, [deleteLayers]);
 
   // --- CAMERA / ZOOM LOGIC ---
   const onWheel = useCallback((e: WheelEvent) => {
@@ -541,14 +568,12 @@ export default function Canvas({
       setRectangleLayers((prev) => {
         const next = prev.filter((l) => l.id !== layerId);
 
-        saveState(JSON.stringify(next));
-
         setSelection((selection) => selection.filter((id) => id !== layerId));
 
         return next;
       });
     },
-    [saveState, dirtyLayers],
+    [dirtyLayers],
   );
 
   // --- POINTER EVENTS ---
@@ -584,21 +609,30 @@ export default function Canvas({
             fill: lastUsedColor,
             value: "Text",
           },
-        }
+        };
 
         setDraftRectangleLayer(draft);
 
-        wsRef.current?.send(JSON.stringify({
-          type: "CREATE_DRAFT",
-          content: draft,
-          userId: user?.id
-        }))
+        wsRef.current?.send(
+          JSON.stringify({
+            type: "CREATE_DRAFT",
+            content: draft,
+            userId: user?.id,
+          }),
+        );
       }
 
       if (canvasState.mode === CanvasMode.Eraser) {
         const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers);
         if (hitId) eraseLayer(hitId);
         return;
+      }
+
+      if (
+        canvasState.mode === CanvasMode.Translating ||
+        canvasState.mode === CanvasMode.Resizing
+      ) {
+        recordHistory();
       }
     },
     [canvasState, clientToWorld],
@@ -669,7 +703,6 @@ export default function Canvas({
           },
         };
 
-
         const node = draftElementRef.current;
         if (!node) return;
 
@@ -695,15 +728,19 @@ export default function Canvas({
         }
 
         const now = Date.now();
-        if (  now - lastSentMoveRef.current > 30 && wsRef.current?.readyState === WebSocket.OPEN) {
+        if (
+          now - lastSentMoveRef.current > 30 &&
+          wsRef.current?.readyState === WebSocket.OPEN
+        ) {
           lastSentMoveRef.current = now;
-          wsRef.current?.send(JSON.stringify({
-            type: "DRAFT_UPDATE",
-            content: {x, y, width, height},
-            userId: user?.id
-          }))
+          wsRef.current?.send(
+            JSON.stringify({
+              type: "DRAFT_UPDATE",
+              content: { x, y, width, height },
+              userId: user?.id,
+            }),
+          );
         }
-
       }
     },
     [canvasState, clientToWorld, lastUsedColor],
@@ -728,6 +765,9 @@ export default function Canvas({
             points: canvasState.pencilPoints,
           };
 
+          // Use Store instead of Manual State + JSON.stringify
+          historyStore.getState().insertLayer(newId, newLayer, true);
+
           const nextLayers = [
             ...rectangleLayers,
             { id: newId, layer: newLayer },
@@ -743,7 +783,6 @@ export default function Canvas({
             }),
           );
 
-          saveState(JSON.stringify(nextLayers));
           onLayerChange(newId, newLayer);
 
           setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
@@ -779,6 +818,10 @@ export default function Canvas({
           value: "",
         };
 
+        // INSERTING A NEW LAYER
+        historyStore.getState().insertLayer(newId, newLayer, true);
+        onLayerChange(newId, newLayer);
+
         const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
         setRectangleLayers(nextLayers);
 
@@ -791,12 +834,6 @@ export default function Canvas({
           }),
         );
 
-        saveState(JSON.stringify(nextLayers));
-        onLayerChange(newId, newLayer);
-
-        insertingStartRef.current = null;
-        setDraftRectangleLayer(null);
-
         wsRef?.current?.send(
           JSON.stringify({
             type: "CREATE_DRAFT",
@@ -804,28 +841,30 @@ export default function Canvas({
           }),
         );
 
+        insertingStartRef.current = null;
+        setDraftRectangleLayer(null);
         setCanvasState({ mode: CanvasMode.None });
-      }
-
-      // ... rest of your logic for Translating/Resizing
-      else if (
+      } else if (
         canvasState.mode === CanvasMode.Translating ||
         canvasState.mode === CanvasMode.Resizing
       ) {
-        saveState(JSON.stringify(rectangleLayers));
+        selection.forEach((id) => {
+          const node = layerRefs.current.get(id);
+          if (node) {
+            // Get the actual data from the DOM/Current State to save the final delta
+            const currentLayer = rectangleLayers.find((l) => l.id === id);
+            if (currentLayer) {
+              historyStore.getState().updateLayer(id, currentLayer.layer, true);
+            }
+          }
+        });
+
         setCanvasState({ mode: CanvasMode.None });
       }
 
       e.currentTarget.releasePointerCapture(e.pointerId);
     },
-    [
-      canvasState,
-      clientToWorld,
-      lastUsedColor,
-      rectangleLayers,
-      saveState,
-      onLayerChange,
-    ],
+    [canvasState, clientToWorld, lastUsedColor, rectangleLayers, onLayerChange],
   );
 
   const selectionBounds = useMemo(() => {
@@ -1100,7 +1139,6 @@ export default function Canvas({
       selection,
       clientToWorld,
       user?.name,
-      currentState,
       throttledLayerBroadcast,
     ],
   );
@@ -1134,7 +1172,6 @@ export default function Canvas({
         });
 
         setRectangleLayers(nextLayers);
-        saveState(JSON.stringify(nextLayers));
 
         // Reset the outer <g> translate and clear any stale CSS vars
         if (selectionBoxRef.current) {
@@ -1222,7 +1259,6 @@ export default function Canvas({
         });
 
         setRectangleLayers(nextLayers);
-        saveState(JSON.stringify(nextLayers));
 
         nextLayers.forEach((item) => {
           if (selection.includes(item.id)) {
@@ -1263,14 +1299,7 @@ export default function Canvas({
         setCanvasState({ mode: CanvasMode.None });
       }
     },
-    [
-      canvasState,
-      clientToWorld,
-      rectangleLayers,
-      saveState,
-      selection,
-      dirtyLayers,
-    ],
+    [canvasState, clientToWorld, rectangleLayers, selection, dirtyLayers],
   );
 
   const handleValueChange = useCallback(
@@ -1302,13 +1331,14 @@ export default function Canvas({
         layer: updatedLayerObj.layer,
         status: "update",
       });
-      saveState(JSON.stringify(nextLayers));
     },
-    [rectangleLayers, saveState, dirtyLayers],
+    [rectangleLayers, dirtyLayers],
   );
 
   const onChangeColor = useCallback(
     (fill: color) => {
+      recordHistory();
+
       setLastUsedColor(fill);
 
       // If items are selected, update their color immediately
@@ -1333,10 +1363,9 @@ export default function Canvas({
           return item;
         });
         setRectangleLayers(nextLayers);
-        saveState(JSON.stringify(nextLayers));
       }
     },
-    [selection, rectangleLayers, saveState, dirtyLayers],
+    [selection, rectangleLayers, dirtyLayers],
   );
 
   const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
@@ -1361,8 +1390,8 @@ export default function Canvas({
         setCanvasState={setCanvasState}
         undo={undo}
         redo={redo}
-        canUndo={canUndo}
-        canRedo={canRedo}
+        canUndo={history.length > 0}
+        canRedo={redoStack.length > 0}
         lastUsedColor={lastUsedColor}
         onChangeColor={onChangeColor}
         deleteLayers={deleteLayers}
@@ -1553,7 +1582,7 @@ export default function Canvas({
 
             const { id, layer } = draft;
 
-            const userDraftId = `draft-${userId}`
+            const userDraftId = `draft-${userId}`;
 
             if (layer.type === layerType.Ellipse) {
               return (
@@ -1562,8 +1591,8 @@ export default function Canvas({
                   id={id}
                   ref={(el) => {
                     if (el) {
-                      otherDraftlayerRef.current.set(userDraftId, el)
-                    } else otherDraftlayerRef.current.delete(userDraftId)
+                      otherDraftlayerRef.current.set(userDraftId, el);
+                    } else otherDraftlayerRef.current.delete(userDraftId);
                   }}
                   layer={layer}
                   onPointerDown={() => {}}
@@ -1579,8 +1608,8 @@ export default function Canvas({
                   id={id}
                   ref={(el) => {
                     if (el) {
-                      otherDraftlayerRef.current.set(userDraftId, el)
-                    } else otherDraftlayerRef.current.delete(userDraftId)
+                      otherDraftlayerRef.current.set(userDraftId, el);
+                    } else otherDraftlayerRef.current.delete(userDraftId);
                   }}
                   layer={layer}
                   onPointerDown={() => {}}
@@ -1597,8 +1626,8 @@ export default function Canvas({
                   id={id}
                   ref={(el) => {
                     if (el) {
-                      otherDraftlayerRef.current.set(userDraftId, el)
-                    } else otherDraftlayerRef.current.delete(userDraftId)
+                      otherDraftlayerRef.current.set(userDraftId, el);
+                    } else otherDraftlayerRef.current.delete(userDraftId);
                   }}
                   layer={layer}
                   onPointerDown={() => {}}
@@ -1614,8 +1643,8 @@ export default function Canvas({
                 id={id}
                 ref={(el) => {
                   if (el) {
-                    otherDraftlayerRef.current.set(userDraftId, el)
-                  } else otherDraftlayerRef.current.delete(userDraftId)
+                    otherDraftlayerRef.current.set(userDraftId, el);
+                  } else otherDraftlayerRef.current.delete(userDraftId);
                 }}
                 layer={layer}
                 onPointerDown={() => {}}
