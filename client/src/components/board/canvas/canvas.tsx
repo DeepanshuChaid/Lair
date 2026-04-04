@@ -12,7 +12,6 @@ import {
   Side,
   XYMH,
 } from "@/types/canvas";
-import { useHistory } from "@/hooks/use-history";
 import { connectSocket } from "@/lib/api/websocket-api";
 
 import Info from "../info/info";
@@ -35,7 +34,6 @@ import { Note } from "../boardTools/note";
 import { Text } from "../boardTools/text";
 import { Path } from "../boardTools/path";
 import { useCursorStore } from "../../../store/use-cursor-store/user-cursor-store";
-import { historyStore } from "@/store/history-store/history-store";
 
 export default function Canvas({
   id,
@@ -54,6 +52,54 @@ export default function Canvas({
     mode: CanvasMode.None,
   });
 
+  const [rectangleLayers, setRectangleLayers] = useState<
+    Array<{ id: string; layer: any }>
+  >([]);
+  const [selection, setSelection] = useState<string[]>([]);
+
+  // History management
+  const historyRef = useRef<Array<{ id: string; layer: any }[]>>([]);
+  const historyIndexRef = useRef(-1);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const updateHistoryUI = useCallback(() => {
+    setCanUndo(historyIndexRef.current > 0);
+    setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+  }, []);
+
+  const saveToHistory = useCallback(
+    (layers: typeof rectangleLayers) => {
+      // Remove any future states if we're not at the end
+      historyRef.current = historyRef.current.slice(
+        0,
+        historyIndexRef.current + 1,
+      );
+      historyRef.current.push(JSON.parse(JSON.stringify(layers)));
+      historyIndexRef.current += 1;
+      updateHistoryUI();
+    },
+    [updateHistoryUI],
+  );
+
+  const undo = useCallback(() => {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    const previousState = historyRef.current[historyIndexRef.current];
+    setRectangleLayers(JSON.parse(JSON.stringify(previousState)));
+    setSelection([]);
+    updateHistoryUI();
+  }, [updateHistoryUI]);
+
+  const redo = useCallback(() => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    const nextState = historyRef.current[historyIndexRef.current];
+    setRectangleLayers(JSON.parse(JSON.stringify(nextState)));
+    setSelection([]);
+    updateHistoryUI();
+  }, [updateHistoryUI]);
+
   const dragStartlayersRef = useRef<Map<string, { x: number; y: number }>>(
     new Map(),
   );
@@ -67,78 +113,21 @@ export default function Canvas({
 
   const { user } = useAuth();
 
-  const [rectangleLayers, setRectangleLayers] = useState<
-    Array<{ id: string; layer: any }>
-  >([]);
+  const wsRef = useRef<WebSocket | null>(null);
+  const lastSentRef = useRef<number>(0);
+  const lastSentPencilRef = useRef<number>(0);
+  const lastSentMoveRef = useRef(0);
+
   const [draftRectangleLayer, setDraftRectangleLayer] = useState<{
     id: string;
     layer: any;
   } | null>(null);
-
-  const [history, setHistory] = useState<any[]>([]); // Stack of past states
-  const [redoStack, setRedoStack] = useState<any[]>([]); // Stack of undone states
-
-  // Helper to take a snapshot of current layers before an action starts
-  const recordHistory = useCallback(() => {
-    setHistory((prev) => [...prev, JSON.stringify(rectangleLayers)]);
-    setRedoStack([]); // Clear redo whenever a new action is performed
-  }, [rectangleLayers]);
-
-  const undo = useCallback(() => {
-    if (history.length === 0) return;
-
-    const prevState = history[history.length - 1];
-    const currentState = JSON.stringify(rectangleLayers);
-
-    setRedoStack((prev) => [...prev, currentState]);
-    setHistory((prev) => prev.slice(0, -1));
-
-    const parsedLayers = JSON.parse(prevState);
-    setRectangleLayers(parsedLayers);
-
-    // Broadcast the full state reset to others
-    wsRef.current?.send(
-      JSON.stringify({
-        type: "LAYER_SET_ALL", // You'll need this message type in your backend
-        content: parsedLayers,
-        userId: user?.id,
-      }),
-    );
-  }, [history, rectangleLayers, user?.id]);
-
-  const redo = useCallback(() => {
-    if (redoStack.length === 0) return;
-
-    const nextState = redoStack[redoStack.length - 1];
-    const currentState = JSON.stringify(rectangleLayers);
-
-    setHistory((prev) => [...prev, currentState]);
-    setRedoStack((prev) => prev.slice(0, -1));
-
-    const parsedLayers = JSON.parse(nextState);
-    setRectangleLayers(parsedLayers);
-
-    wsRef.current?.send(
-      JSON.stringify({
-        type: "LAYER_SET_ALL",
-        content: parsedLayers,
-        userId: user?.id,
-      }),
-    );
-  }, [redoStack, rectangleLayers, user?.id]);
-
-  const wsRef = useRef<WebSocket | null>(null);
-
-  const lastSentRef = useRef<number>(0);
-  const lastSentPencilRef = useRef<number>(0);
-  const lastSentMoveRef = useRef(0);
 
   const [othersDraftLayers, setOthersDraftLayers] = useState<
     Record<string, { id: string; layer: any } | null>
   >({});
 
   const otherDraftlayerRef = useRef(new Map<string, any>());
-
   const draftElementRef = useRef<SVGSVGElement>(null);
 
   const [otherPencil, setOtherPencil] = useState<Record<
@@ -151,9 +140,6 @@ export default function Canvas({
   );
   const resizingBaseLayersRef = useRef<Array<{ id: string; layer: any }>>([]);
 
-  // Key is ID
-  const [selection, setSelection] = useState<string[]>([]);
-
   const selectionRef = useRef<string[]>([]);
   useEffect(() => {
     selectionRef.current = selection;
@@ -162,6 +148,7 @@ export default function Canvas({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const selectionBoxRef = useRef<SVGGElement | null>(null);
   const insertingStartRef = useRef<Point | null>(null);
+
   const didInitHistoryRef = useRef(false);
 
   const layerRefs = useRef(new Map<string, any>());
@@ -235,6 +222,8 @@ export default function Canvas({
             const layers = data.content;
             if (Array.isArray(layers)) {
               setRectangleLayers(layers);
+              // Sync history so the user doesn't "undo" into an empty screen
+              // saveState(JSON.stringify(layers));
             }
           }
 
@@ -432,6 +421,26 @@ export default function Canvas({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [rectangleLayers, id]);
 
+  // --- HISTORY SNAPSHOTS ---
+  // useEffect(() => {
+  //   if (didInitHistoryRef.current) return;
+  //   didInitHistoryRef.current = true;
+  //   saveState(JSON.stringify([]));
+  // }, [saveState]);
+
+  // useEffect(() => {
+  //   if (currentState === undefined) return;
+  //   try {
+  //     const parsed = JSON.parse(currentState);
+  //     if (Array.isArray(parsed)) setRectangleLayers(parsed);
+  //   } catch {
+  //     // Silent fail for malformed history
+  //   } finally {
+  //     insertingStartRef.current = null;
+  //     setDraftRectangleLayer(null);
+  //   }
+  // }, [currentState]);
+
   const deleteLayers = useCallback(() => {
     if (selection.length === 0) return;
 
@@ -453,9 +462,9 @@ export default function Canvas({
     );
 
     setRectangleLayers(nextLayers);
-
+    saveToHistory(nextLayers);
     setSelection([]);
-  }, [selection, rectangleLayers, dirtyLayers]);
+  }, [selection, rectangleLayers, dirtyLayers, saveToHistory]);
 
   // --- KEYBOARD SHORTCUTS ---
   useEffect(() => {
@@ -481,13 +490,11 @@ export default function Canvas({
 
       if (e.key === "z" || e.key === "Z") {
         e.preventDefault();
-        // UNDO()
-        historyStore.getState().undo();
+        undo();
       }
       if (e.key === "y" || e.key === "Y") {
         e.preventDefault();
-        // REDO();
-        historyStore.getState().redo();
+        redo();
       }
 
       if (e.key === "d" || e.key === "D") {
@@ -511,7 +518,7 @@ export default function Canvas({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [deleteLayers]);
+  }, [undo, redo, deleteLayers]);
 
   // --- CAMERA / ZOOM LOGIC ---
   const onWheel = useCallback((e: WheelEvent) => {
@@ -565,15 +572,12 @@ export default function Canvas({
         }),
       );
 
-      setRectangleLayers((prev) => {
-        const next = prev.filter((l) => l.id !== layerId);
-
-        setSelection((selection) => selection.filter((id) => id !== layerId));
-
-        return next;
-      });
+      const nextLayers = rectangleLayers.filter((l) => l.id !== layerId);
+      setRectangleLayers(nextLayers);
+      saveToHistory(nextLayers);
+      setSelection((selection) => selection.filter((id) => id !== layerId));
     },
-    [dirtyLayers],
+    [rectangleLayers, dirtyLayers, saveToHistory],
   );
 
   // --- POINTER EVENTS ---
@@ -626,13 +630,6 @@ export default function Canvas({
         const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers);
         if (hitId) eraseLayer(hitId);
         return;
-      }
-
-      if (
-        canvasState.mode === CanvasMode.Translating ||
-        canvasState.mode === CanvasMode.Resizing
-      ) {
-        recordHistory();
       }
     },
     [canvasState, clientToWorld],
@@ -765,14 +762,15 @@ export default function Canvas({
             points: canvasState.pencilPoints,
           };
 
-          // Use Store instead of Manual State + JSON.stringify
-          historyStore.getState().insertLayer(newId, newLayer, true);
-
           const nextLayers = [
             ...rectangleLayers,
             { id: newId, layer: newLayer },
           ];
           setRectangleLayers(nextLayers);
+          saveToHistory(nextLayers);
+
+          // saveState(JSON.stringify(nextLayers));
+          onLayerChange(newId, newLayer);
 
           // BROADCAST CREATE
           wsRef.current?.send(
@@ -782,8 +780,6 @@ export default function Canvas({
               userId: user?.id,
             }),
           );
-
-          onLayerChange(newId, newLayer);
 
           setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
         }
@@ -818,12 +814,12 @@ export default function Canvas({
           value: "",
         };
 
-        // INSERTING A NEW LAYER
-        historyStore.getState().insertLayer(newId, newLayer, true);
+        // saveState(JSON.stringify(nextLayers));
         onLayerChange(newId, newLayer);
 
         const nextLayers = [...rectangleLayers, { id: newId, layer: newLayer }];
         setRectangleLayers(nextLayers);
+        saveToHistory(nextLayers);
 
         // BROADCAST CREATE
         wsRef.current?.send(
@@ -834,6 +830,9 @@ export default function Canvas({
           }),
         );
 
+        insertingStartRef.current = null;
+        setDraftRectangleLayer(null);
+
         wsRef?.current?.send(
           JSON.stringify({
             type: "CREATE_DRAFT",
@@ -841,30 +840,28 @@ export default function Canvas({
           }),
         );
 
-        insertingStartRef.current = null;
-        setDraftRectangleLayer(null);
         setCanvasState({ mode: CanvasMode.None });
-      } else if (
+      }
+
+      // ... rest of your logic for Translating/Resizing
+      else if (
         canvasState.mode === CanvasMode.Translating ||
         canvasState.mode === CanvasMode.Resizing
       ) {
-        selection.forEach((id) => {
-          const node = layerRefs.current.get(id);
-          if (node) {
-            // Get the actual data from the DOM/Current State to save the final delta
-            const currentLayer = rectangleLayers.find((l) => l.id === id);
-            if (currentLayer) {
-              historyStore.getState().updateLayer(id, currentLayer.layer, true);
-            }
-          }
-        });
-
+        // saveState(JSON.stringify(rectangleLayers));
         setCanvasState({ mode: CanvasMode.None });
       }
 
       e.currentTarget.releasePointerCapture(e.pointerId);
     },
-    [canvasState, clientToWorld, lastUsedColor, rectangleLayers, onLayerChange],
+    [
+      canvasState,
+      clientToWorld,
+      lastUsedColor,
+      rectangleLayers,
+      onLayerChange,
+      saveToHistory,
+    ],
   );
 
   const selectionBounds = useMemo(() => {
@@ -1139,6 +1136,7 @@ export default function Canvas({
       selection,
       clientToWorld,
       user?.name,
+      // currentState,
       throttledLayerBroadcast,
     ],
   );
@@ -1159,12 +1157,15 @@ export default function Canvas({
         const nextLayers = rectangleLayers.map((item) => {
           const startPos = startState.get(item.id);
           if (selection.includes(item.id) && startPos) {
+            const newX = startPos.x + offset.x;
+            const newY = startPos.y + offset.y;
+
             return {
               ...item,
               layer: {
                 ...item.layer,
-                x: startPos.x + offset.x,
-                y: startPos.y + offset.y,
+                x: newX,
+                y: newY,
               },
             };
           }
@@ -1190,6 +1191,8 @@ export default function Canvas({
             });
           }
         });
+
+        saveToHistory(nextLayers);
 
         const transformPayload = nextLayers
           .filter((l) => selection.includes(l.id))
@@ -1246,19 +1249,22 @@ export default function Canvas({
           if (!selection.includes(item.id)) return item;
           const startItem = startLayers.find((l: any) => l.id === item.id);
           if (!startItem) return item;
+          const updatedLayer = {
+            ...item.layer,
+            x: newX + (startItem.layer.x - initialBounds.x) * scaleX,
+            y: newY + (startItem.layer.y - initialBounds.y) * scaleY,
+            width: startItem.layer.width * scaleX,
+            height: startItem.layer.height * scaleY,
+          };
+
           return {
             ...item,
-            layer: {
-              ...item.layer,
-              x: newX + (startItem.layer.x - initialBounds.x) * scaleX,
-              y: newY + (startItem.layer.y - initialBounds.y) * scaleY,
-              width: startItem.layer.width * scaleX,
-              height: startItem.layer.height * scaleY,
-            },
+            layer: updatedLayer,
           };
         });
 
         setRectangleLayers(nextLayers);
+        // saveState(JSON.stringify(nextLayers));
 
         nextLayers.forEach((item) => {
           if (selection.includes(item.id)) {
@@ -1268,6 +1274,8 @@ export default function Canvas({
             });
           }
         });
+
+        saveToHistory(nextLayers);
 
         const transformPayload = nextLayers
           .filter((l) => selection.includes(l.id))
@@ -1299,73 +1307,83 @@ export default function Canvas({
         setCanvasState({ mode: CanvasMode.None });
       }
     },
-    [canvasState, clientToWorld, rectangleLayers, selection, dirtyLayers],
+    [
+      canvasState,
+      clientToWorld,
+      rectangleLayers,
+      selection,
+      dirtyLayers,
+      saveToHistory,
+    ],
   );
 
   const handleValueChange = useCallback(
     (layerId: string, newValue: string) => {
-      let updatedLayerObj: any = null;
-
-      const nextLayers = rectangleLayers.map((l) => {
-        if (l.id === layerId) {
-          updatedLayerObj = { ...l, layer: { ...l.layer, value: newValue } };
-          return updatedLayerObj;
-        }
-        return l;
-      });
+      const nextLayers = rectangleLayers.map((l) =>
+        l.id === layerId ? { ...l, layer: { ...l.layer, value: newValue } } : l,
+      );
 
       setRectangleLayers(nextLayers);
+      saveToHistory(nextLayers);
 
       // BROADCAST TEXT UPDATE
-      if (updatedLayerObj && wsRef.current?.readyState === WebSocket.OPEN) {
+      const updatedLayer = nextLayers.find((l) => l.id === layerId)?.layer;
+      if (updatedLayer && wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(
           JSON.stringify({
             type: "LAYER_UPDATE_DELTA",
-            content: [updatedLayerObj],
+            content: [{ id: layerId, layer: updatedLayer }],
             userId: user?.id,
           }),
         );
       }
 
       dirtyLayers.current.set(layerId, {
-        layer: updatedLayerObj.layer,
+        layer: updatedLayer,
         status: "update",
       });
     },
-    [rectangleLayers, dirtyLayers],
+    [rectangleLayers, dirtyLayers, saveToHistory],
   );
 
   const onChangeColor = useCallback(
     (fill: color) => {
-      recordHistory();
-
       setLastUsedColor(fill);
 
       // If items are selected, update their color immediately
       if (selection.length > 0) {
         const nextLayers = rectangleLayers.map((item) => {
           if (selection.includes(item.id)) {
-            const updatedLayer = { ...item.layer, fill };
-            dirtyLayers.current.set(item.id, {
-              layer: updatedLayer,
+            return {
+              ...item,
+              layer: { ...item.layer, fill },
+            };
+          }
+          return item;
+        });
+        setRectangleLayers(nextLayers);
+        saveToHistory(nextLayers);
+
+        // Broadcast color changes
+        selection.forEach((id) => {
+          const layer = nextLayers.find((l) => l.id === id)?.layer;
+          if (layer) {
+            dirtyLayers.current.set(id, {
+              layer,
               status: "update",
             });
             wsRef.current?.send(
               JSON.stringify({
                 type: "LAYER_UPDATE_DELTA",
-                content: [{ id: item.id, layer: updatedLayer }],
+                content: [{ id, layer }],
                 userId: user?.id,
               }),
             );
-
-            return { ...item, layer: updatedLayer };
           }
-          return item;
         });
-        setRectangleLayers(nextLayers);
       }
     },
-    [selection, rectangleLayers, dirtyLayers],
+    [selection, rectangleLayers, dirtyLayers, saveToHistory],
   );
 
   const strokeColor = `rgb(${lastUsedColor.r}, ${lastUsedColor.g}, ${lastUsedColor.b})`;
@@ -1390,12 +1408,10 @@ export default function Canvas({
         setCanvasState={setCanvasState}
         undo={undo}
         redo={redo}
-        canUndo={history.length > 0}
-        canRedo={redoStack.length > 0}
+        canUndo={canUndo}
+        canRedo={canRedo}
         lastUsedColor={lastUsedColor}
         onChangeColor={onChangeColor}
-        deleteLayers={deleteLayers}
-        canDelete={selection.length > 0}
       />
 
       <svg
@@ -1490,23 +1506,36 @@ export default function Canvas({
               );
             }
 
-            if (
-              layer.type === layerType.Note ||
-              layer.type === layerType.Text
-            ) {
-              const Component = layer.type === layerType.Note ? Note : Text;
+            if (layer.type === layerType.Note) {
               return (
-                <Component
+                <Note
                   key={layerId}
                   id={layerId}
                   ref={(el: any) => {
                     if (el) layerRefs.current.set(layerId, el);
                     else layerRefs.current.delete(layerId);
                   }}
-                  layer={layer}
+                  layer={layer as NoteLayer}
                   onPointerDown={onLayerPointerDown}
                   selectionColor={selectionColor}
-                  onValueChange={(val) => handleValueChange(layerId, val)} // Using the fixed handler
+                  onValueChange={(val) => handleValueChange(layerId, val)}
+                />
+              );
+            }
+
+            if (layer.type === layerType.Text) {
+              return (
+                <Text
+                  key={layerId}
+                  id={layerId}
+                  ref={(el: any) => {
+                    if (el) layerRefs.current.set(layerId, el);
+                    else layerRefs.current.delete(layerId);
+                  }}
+                  layer={layer as any}
+                  onPointerDown={onLayerPointerDown}
+                  selectionColor={selectionColor}
+                  onValueChange={(val) => handleValueChange(layerId, val)}
                 />
               );
             }
