@@ -250,10 +250,6 @@ export default function Canvas({
                 [data.userId]: data.content, // null OR layer
               }));
             });
-            // setOthersDraftLayers((prev) => ({
-            //   ...prev,
-            //   [data.userId]: data.content, // null OR layer
-            // }));
           }
 
           if (data.type === "DRAFT_UPDATE") {
@@ -673,9 +669,6 @@ export default function Canvas({
           },
         };
 
-        // requestAnimationFrame(() => {
-        //   setDraftRectangleLayer(draftLayer);
-        // })
 
         const node = draftElementRef.current;
         if (!node) return;
