@@ -136,23 +136,6 @@ export default function Canvas({
     [dirtyLayers],
   );
 
-  // 1. Throttled Cursor Broadcast (50ms is standard for smooth cursors)
-  // const throttledCursorMove = useMemo(
-  //   () =>
-  //     throttle((x: number, y: number, name: string) => {
-  //       if (wsRef.current?.readyState === WebSocket.OPEN) {
-  //         wsRef.current.send(
-  //           JSON.stringify({
-  //             type: "CURSOR_MOVE",
-  //             content: { x, y, name },
-  //             userId: user?.id,
-  //           }),
-  //         );
-  //       }
-  //     }, 16),
-  //   [],
-  // );
-
   // 2. Throttled Layer Update (Keep this slightly faster, e.g., 30ms, for "live" feel)
   const throttledLayerBroadcast = useMemo(
     () =>
@@ -294,11 +277,13 @@ export default function Canvas({
           }
 
           if (data.type === "DRAFT_PENCIL") {
-            setOtherPencil((prev) => ({
-              ...prev,
-              // when we need to use a var as a key we use [var]
-              [data.userId]: data.content,
-            }));
+            requestAnimationFrame(() => {
+              setOtherPencil((prev) => ({
+                ...prev,
+                // when we need to use a var as a key we use [var]
+                [data.userId]: data.content,
+              }));
+            })
           }
 
           if (data.type === "LAYER_DELETE") {
@@ -654,7 +639,7 @@ export default function Canvas({
         const now = Date.now();
 
         if (
-          now - lastSentPencilRef.current > 16 &&
+          now - lastSentPencilRef.current > 30 &&
           wsRef.current?.readyState === WebSocket.OPEN
         ) {
           lastSentPencilRef.current = now;
@@ -1408,7 +1393,7 @@ export default function Canvas({
           {draftRectangleLayer &&
             (draftRectangleLayer.layer.type === layerType.Ellipse ? (
               <Ellipse
-                ref={draftElementRef}
+                ref={draftElementRef as any}
                 id={draftRectangleLayer.id}
                 layer={draftRectangleLayer.layer}
                 onPointerDown={() => {}}
@@ -1434,7 +1419,7 @@ export default function Canvas({
               />
             ) : (
               <RectangleTool
-                ref={draftElementRef}
+                ref={draftElementRef as any}
                 id={draftRectangleLayer.id}
                 layer={draftRectangleLayer.layer}
                 onPointerDown={() => {}}
