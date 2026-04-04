@@ -8,9 +8,8 @@ interface SelectionBoxProps {
   onResizeHandlePointerDown: (corner: Side, initialBounds: XYMH) => void;
   isShowingHandles: boolean;
   isPath: boolean;
-  scale: number
+  scale: number;
 }
-
 
 export const SelectionBox = memo(
   ({
@@ -18,7 +17,7 @@ export const SelectionBox = memo(
     onResizeHandlePointerDown,
     isShowingHandles,
     isPath,
-    scale
+    scale,
   }: SelectionBoxProps) => {
     if (!bounds) return null;
     if (isPath) return null;
