@@ -23,7 +23,7 @@ import (
 )
 
 var validate = validator.New()
-var isProduction = os.Getenv("ENV") == "production"
+var isProduction = true
 
 type SafeUser struct {
 	Id              string `json:"id"`
@@ -276,14 +276,14 @@ func GetUser() gin.HandlerFunc {
 	}
 }
 
-// ========== LOGOUT =========== // 
+// ========== LOGOUT =========== //
 func Logout() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Clear the token cookie
 		c.SetCookie( "token", "", -1, "/", "", isProduction, true, )
 		cache.Delete(c.Request.Context(), "user:"+c.GetString("userId"))
-		c.JSON(200, gin.H{"message": "Logged out successfully"}) 
-	} 
+		c.JSON(200, gin.H{"message": "Logged out successfully"})
+	}
 }
 
 
