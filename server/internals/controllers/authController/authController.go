@@ -104,8 +104,16 @@ func Register() gin.HandlerFunc {
 			return
 		}
 
-		c.SetSameSite(http.SameSiteLaxMode)
-		c.SetCookie("token", token, 3600*24, "/", "", isProduction, true)
+		c.SetSameSite(http.SameSiteNoneMode) // Required for cross-domain
+		c.SetCookie(
+			"token",
+			token,
+			3600*24,    // 24 hours
+			"/",
+			"",         // Let browser handle domain or set to your specific frontend domain
+			true,       // Must be true for SameSiteNone
+			true,       // HttpOnly
+		)
 
 		safeUser := SafeUser{
 			Id:              body.Id,
@@ -180,8 +188,16 @@ func Login() gin.HandlerFunc {
 			return
 		}
 
-		c.SetSameSite(http.SameSiteLaxMode)
-		c.SetCookie("token", token, 3600*24, "/", "", isProduction, true)
+		c.SetSameSite(http.SameSiteNoneMode) // Required for cross-domain
+		c.SetCookie(
+			"token",
+			token,
+			3600*24,    // 24 hours
+			"/",
+			"",         // Let browser handle domain or set to your specific frontend domain
+			true,       // Must be true for SameSiteNone
+			true,       // HttpOnly
+		)
 
 		safeUser := SafeUser{
 			Id:              user.Id,
@@ -393,15 +409,15 @@ func GoogleCallback() gin.HandlerFunc {
 		}
 
 		// 🍪 set cookie
-		// c.SetSameSite(http.SameSiteLaxMode)
+		c.SetSameSite(http.SameSiteNoneMode) // Required for cross-domain
 		c.SetCookie(
 			"token",
 			tokenString,
-			3600*24,
+			3600*24,    // 24 hours
 			"/",
-			"",
-			isProduction, // secure (true in prod)
-			true,         // httpOnly
+			"",         // Let browser handle domain or set to your specific frontend domain
+			true,       // Must be true for SameSiteNone
+			true,       // HttpOnly
 		)
 
 		frontendUrl := os.Getenv("FRONTEND_URL")
