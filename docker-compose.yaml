@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./server/.env
+    restart: always
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      # CRITICAL: Passing these so 'npm run build' can see them
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
+        - NEXT_PUBLIC_BACKEND_WEBSOCKET_URL=ws://localhost:3000
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./client/.env
+    depends_on:
+      - backend
+    restart: always
+
+networks:
+  default:
+    name: lair-network
