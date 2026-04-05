@@ -87,6 +87,15 @@ export default function Canvas({
     historyIndexRef.current -= 1;
     const previousState = historyRef.current[historyIndexRef.current];
     setRectangleLayers(JSON.parse(JSON.stringify(previousState)));
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current?.send(
+        JSON.stringify({
+          type: "HANDLE_HISTORY",
+          content: previousState,
+          userId: user?.id,
+        }),
+      );
+    }
     setSelection([]);
     updateHistoryUI();
   }, [updateHistoryUI]);
@@ -96,6 +105,15 @@ export default function Canvas({
     historyIndexRef.current += 1;
     const nextState = historyRef.current[historyIndexRef.current];
     setRectangleLayers(JSON.parse(JSON.stringify(nextState)));
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current?.send(
+        JSON.stringify({
+          type: "HANDLE_HISTORY",
+          content: nextState,
+        }),
+      );
+    }
     setSelection([]);
     updateHistoryUI();
   }, [updateHistoryUI]);
@@ -208,14 +226,14 @@ export default function Canvas({
           const data = JSON.parse(event.data);
 
           // Ignore our own echo messages from the server (we already applied them locally)
-          if (
-            data.userId &&
-            user?.id &&
-            data.userId === user.id &&
-            data.type !== "CURSOR_MOVE"
-          ) {
-            return;
-          }
+          // if (
+          //   data.userId &&
+          //   user?.id &&
+          //   data.userId === user.id &&
+          //   data.type !== "CURSOR_MOVE"
+          // ) {
+          //   return;
+          // }
 
           // 1. Handle Initial State from Backend
           if (data.type === "init_state") {
@@ -253,6 +271,11 @@ export default function Canvas({
             setSelection((prevSelection) =>
               prevSelection.filter((id) => !updatedIds.includes(id)),
             );
+          }
+
+          if (data.type === "HANDLE_HISTORY") {
+            const layerData = data.content;
+            setRectangleLayers(layerData);
           }
 
           if (data.type === "LAYER_TRANSFORM") {
