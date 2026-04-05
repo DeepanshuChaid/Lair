@@ -1722,7 +1722,10 @@ export default function Canvas({
           <g ref={selectionBoxRef}>
             <SelectionBox
               bounds={selectionBounds}
-              onResizeHandlePointerDown={(corner, bounds) => {
+              onResizeHandlePointerDown={(corner, bounds, e) => {
+                if (svgRef.current) {
+                  svgRef.current.setPointerCapture(e.pointerId);
+                }
                 resizingBaseLayersRef.current = rectangleLayers.map((l) => ({
                   id: l.id,
                   layer: { ...l.layer },
