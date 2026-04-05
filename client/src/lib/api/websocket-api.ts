@@ -9,14 +9,15 @@ export const connectSocket = async (roomId: string): Promise<any> => {
 
     if (!ticket) throw new Error("No ticket received");
 
-    const socket = new WebSocket(`${backendUrl}/api/ws/${roomId}?ticket=${ticket}`);
+    const socket = new WebSocket(
+      `${backendUrl}/api/ws/${roomId}?ticket=${ticket}`,
+    );
     return { socket, error: null };
   } catch (err: any) {
     // This catches 401, 500, and network errors
-    return { 
-        socket: null, 
-        error: err.response?.data?.message || err.message || "Connection failed" 
+    return {
+      socket: null,
+      error: err.response?.data?.message || err.message || "Connection failed",
     };
   }
-};  
-
+};

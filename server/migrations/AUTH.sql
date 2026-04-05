@@ -21,6 +21,9 @@ CREATE TABLE auth_providers (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+ALTER TABLE auth_providers
+ADD CONSTRAINT unique_user_provider UNIQUE (user_id, provider);
+
 -- +goose Down
 DROP TABLE users
 DROP TABLE IF EXISTS auth_providers
