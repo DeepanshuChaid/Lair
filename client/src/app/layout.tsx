@@ -7,7 +7,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/providers/auth-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,7 +24,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Lair - Sketch, Discuss, and Refine",
-  description: "Lair provides a seamless, real-time environment to turn raw thoughts into structured visual plans.",
+  description:
+    "Lair provides a seamless, real-time environment to turn raw thoughts into structured visual plans.",
+  viewport:
+    "width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no",
 };
 
 export default function RootLayout({
@@ -29,19 +35,23 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  
   return (
     <html
       lang="en"
-      className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-mono", jetbrainsMono.variable)}
+      className={cn(
+        "h-full",
+        "antialiased",
+        geistSans.variable,
+        geistMono.variable,
+        "font-mono",
+        jetbrainsMono.variable,
+      )}
     >
       <body className="min-h-full h-full w-full flex flex-col">
         <Providers>
           <AuthProvider>
             <Toaster />
-            <TooltipProvider>
-            { children}
-            </TooltipProvider>
+            <TooltipProvider>{children}</TooltipProvider>
           </AuthProvider>
         </Providers>
       </body>

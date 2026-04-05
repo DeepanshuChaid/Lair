@@ -565,12 +565,124 @@ export default function Canvas({
     }
   }, []);
 
+  // --- TOUCH EVENT HANDLING FOR MOBILE ---
+  const touchStateRef = useRef<{
+    initialDistance: number | null;
+    initialScale: number | null;
+    panStartX: number | null;
+    panStartY: number | null;
+    lastPanX: number | null;
+    lastPanY: number | null;
+  }>({
+    initialDistance: null,
+    initialScale: null,
+    panStartX: null,
+    panStartY: null,
+    lastPanX: null,
+    lastPanY: null,
+  });
+
+  const onTouchStart = useCallback(
+    (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const dx = touch2.clientX - touch1.clientX;
+        const dy = touch2.clientY - touch1.clientY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        touchStateRef.current.initialDistance = distance;
+        touchStateRef.current.initialScale = camera.scale;
+        touchStateRef.current.panStartX = null;
+        touchStateRef.current.panStartY = null;
+      } else if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        touchStateRef.current.panStartX = touch.clientX;
+        touchStateRef.current.panStartY = touch.clientY;
+        touchStateRef.current.lastPanX = touch.clientX;
+        touchStateRef.current.lastPanY = touch.clientY;
+        touchStateRef.current.initialDistance = null;
+      }
+    },
+    [camera.scale],
+  );
+
+  const onTouchMove = useCallback((e: TouchEvent) => {
+    if (
+      e.touches.length === 2 &&
+      touchStateRef.current.initialDistance !== null
+    ) {
+      e.preventDefault();
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const dx = touch2.clientX - touch1.clientX;
+      const dy = touch2.clientY - touch1.clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      const midX = (touch1.clientX + touch2.clientX) / 2;
+      const midY = (touch1.clientY + touch2.clientY) / 2;
+
+      const initialDistance = touchStateRef.current.initialDistance;
+      const initialScale = touchStateRef.current.initialScale!;
+
+      if (initialDistance > 0) {
+        const scaleFactor = distance / initialDistance;
+        const newScale = Math.min(
+          Math.max(initialScale * scaleFactor, 0.1),
+          10,
+        );
+
+        setCamera((prev) => {
+          const dx = (midX - prev.x) * (newScale / prev.scale - 1);
+          const dy = (midY - prev.y) * (newScale / prev.scale - 1);
+          return { x: prev.x - dx, y: prev.y - dy, scale: newScale };
+        });
+      }
+    } else if (
+      e.touches.length === 1 &&
+      touchStateRef.current.panStartX !== null &&
+      touchStateRef.current.lastPanX !== null &&
+      touchStateRef.current.lastPanY !== null
+    ) {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - touchStateRef.current.lastPanX;
+      const deltaY = touch.clientY - touchStateRef.current.lastPanY;
+
+      setCamera((prev) => ({
+        ...prev,
+        x: prev.x + deltaX,
+        y: prev.y + deltaY,
+      }));
+
+      touchStateRef.current.lastPanX = touch.clientX;
+      touchStateRef.current.lastPanY = touch.clientY;
+    }
+  }, []);
+
+  const onTouchEnd = useCallback((e: TouchEvent) => {
+    touchStateRef.current.initialDistance = null;
+    touchStateRef.current.initialScale = null;
+    touchStateRef.current.panStartX = null;
+    touchStateRef.current.panStartY = null;
+    touchStateRef.current.lastPanX = null;
+    touchStateRef.current.lastPanY = null;
+  }, []);
+
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
     svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, [onWheel]);
+    svg.addEventListener("touchstart", onTouchStart, { passive: false });
+    svg.addEventListener("touchmove", onTouchMove, { passive: false });
+    svg.addEventListener("touchend", onTouchEnd, { passive: false });
+    return () => {
+      svg.removeEventListener("wheel", onWheel);
+      svg.removeEventListener("touchstart", onTouchStart);
+      svg.removeEventListener("touchmove", onTouchMove);
+      svg.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [onWheel, onTouchStart, onTouchMove, onTouchEnd]);
 
   const clientToWorld = useCallback(
     (clientX: number, clientY: number) => {
