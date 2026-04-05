@@ -34,12 +34,11 @@ Instead of saving to a database 60 times a second (which would crash most system
 
 ## 🛠 Tech Stack
 
-| Component            | Technology                        |
-| :------------------- | :-------------------------------- |
-| **Backend**          | Golang, Gin Gonic, WebSockets     |
-| **Frontend**         | Next.js, TypeScript, Tailwind CSS |
-| **Drawing Logic**    | Pure Svg (No Lib)                 |
-| **State Management** | React Hooks + Batching Logic      |
+| Component         | Technology                    |
+| :---------------- | :---------------------------- |
+| **Backend**       | Golang, Gin Gonic, WebSockets |
+| **Frontend**      | Next.js, TypeScript,Tanstack  |
+| **Drawing Logic** | Pure Svg (No Lib)             |
 
 ---
 
