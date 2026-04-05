@@ -12,7 +12,7 @@ interface RectangleProps {
 }
 
 // 1. Wrap the forwardRef inside a memo
-export const RectangleTool = memo(
+const RectangleTool = memo(
   forwardRef<SVGRectElement, RectangleProps>(
     ({ id, layer, onPointerDown, selectionColor }, ref) => {
       const { x, y, height, width, fill } = layer;
@@ -35,8 +35,10 @@ export const RectangleTool = memo(
           stroke={selectionColor}
         />
       );
-    }
-  )
+    },
+  ),
 );
+
+export default RectangleTool;
 
 RectangleTool.displayName = "RectangleTool";

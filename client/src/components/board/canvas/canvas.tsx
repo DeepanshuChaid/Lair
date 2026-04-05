@@ -21,7 +21,7 @@ import { CursorPresence } from "../cursor-presence";
 import { useAuth } from "@/providers/auth-provider";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { RectangleTool } from "../boardTools/rectangle";
+import Rectangle from "../boardTools/rectangle";
 import { SelectionBox } from "../selection-box";
 import { Ellipse } from "../boardTools/ellipse";
 import {
@@ -1479,7 +1479,7 @@ export default function Canvas({
                 onValueChange={() => {}}
               />
             ) : (
-              <RectangleTool
+              <Rectangle
                 ref={draftElementRef as any}
                 id={draftRectangleLayer.id}
                 layer={draftRectangleLayer.layer}
@@ -1498,7 +1498,7 @@ export default function Canvas({
             // Handle specific layer types
             if (layer.type === layerType.Rectangle) {
               return (
-                <RectangleTool
+                <Rectangle
                   key={layerId}
                   id={layerId}
                   // el means the actual element if the el has mounted add it to the map
@@ -1690,7 +1690,7 @@ export default function Canvas({
             }
 
             return (
-              <RectangleTool
+              <Rectangle
                 key={userId}
                 id={id}
                 ref={(el) => {

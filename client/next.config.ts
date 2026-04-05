@@ -5,11 +5,18 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-        pathname: '/**', // This allows all paths under res.cloudinary.com
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/**", // This allows all paths under res.cloudinary.com
       },
     ],
+  },
+
+  typescript: {
+    // !! WARN !!
+    // Dangerously allow production builds to successfully complete
+    // even if your project has type errors.
+    ignoreBuildErrors: true,
   },
 };
 

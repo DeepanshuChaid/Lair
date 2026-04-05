@@ -8,7 +8,7 @@ ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
 ENV NEXT_PUBLIC_BACKEND_WEBSOCKET_URL=$NEXT_PUBLIC_BACKEND_WEBSOCKET_URL
 
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 

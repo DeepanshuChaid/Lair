@@ -13,10 +13,10 @@ import (
 var Pool *pgxpool.Pool
 
 func Connect() {
-  err := godotenv.Load()
-  if err != nil {
-    log.Fatal("Error loading .env file")
-  }
+  godotenv.Load()
+  // if err != nil {
+  //   log.Fatal("Error loading .env file")
+  // }
   databaseUrl := os.Getenv("NEON_DATABASE_URL")
 
   config, err := pgxpool.ParseConfig(databaseUrl)
