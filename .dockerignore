@@ -1,6 +1,17 @@
-.env
-node_modules
-.git
-dist
-bin
-*.log
+# Dependency folders
+**/node_modules
+**/.next
+**/dist
+**/bin
+**/out
+
+# Version Control
+**/.git
+
+# Environment Secrets (CRITICAL)
+**/.env
+**/.env.*
+
+# OS/Logs
+**/*.log
+.DS_Store
