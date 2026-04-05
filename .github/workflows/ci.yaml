@@ -1,0 +1,30 @@
+name: Lair CI/CD
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GO
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.22"
+
+      - name: Build Backend Container
+        run: docker build ./server -t lair-backend:latest
+
+      - name: Build Frontend Container
+        # We pass dummy args just to verify the build works in CI
+        run: |
+          docker build ./client \
+            --build-arg NEXT_PUBLIC_BACKEND_URL=http://localhost:3000 \
+            --build-arg NEXT_PUBLIC_BACKEND_WEBSOCKET_URL=ws://localhost:3000 \
+            -t lair-frontend:latest
