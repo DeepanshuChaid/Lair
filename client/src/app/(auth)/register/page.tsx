@@ -24,8 +24,14 @@ const formSchema = z
         message: "Organization name cannot contain spaces",
       }),
     email: z.string().email("Invalid email").trim(),
-    password: z.string().min(6, "Password must be at least 6 characters").trim(),
-    confirmPassword: z.string().min(6, "Password must be at least 6 characters").trim(),
+    password: z
+      .string()
+      .min(6, "Password must be at least 6 characters")
+      .trim(),
+    confirmPassword: z
+      .string()
+      .min(6, "Password must be at least 6 characters")
+      .trim(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -42,13 +48,17 @@ export default function SignUpPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
 
-  const { handleSubmit, register, formState: { errors } } = useForm<FormValues>({
+  const {
+    handleSubmit,
+    register,
+    formState: { errors },
+  } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       email: "",
       password: "",
-      confirmPassword: ""
+      confirmPassword: "",
     },
   });
 
@@ -84,11 +94,16 @@ export default function SignUpPage() {
     <div className="flex flex-col justify-start items-center gap-6 min-h-svh h-full max-h-svh overflow-y-auto px-4 py-12 bg-[#FAFAFA]">
       <div className="flex w-full flex-col gap-8 justify-center items-center">
         {/* LOGO */}
-        <Link href="/" className="flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20 rounded-md">
+        <Link
+          href="/"
+          className="flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20 rounded-md"
+        >
           <div className="h-10 w-10 bg-[#FCFCFC] rounded-[10.92px] flex items-center justify-center">
             <Image src="/logo.png" alt="Logo" width={64} height={64} />
           </div>
-          <span className="font-bold text-[#171717] tracking-tight text-24">Lair</span>
+          <span className="font-bold text-[#171717] tracking-tight text-24">
+            Lair
+          </span>
         </Link>
 
         <div className="flex flex-col justify-center items-center p-8 gap-8 w-full bg-white border border-[#E5E5E5] rounded-[16px] shadow-sm max-w-[500px]">
@@ -113,11 +128,16 @@ export default function SignUpPage() {
           </div>
 
           {/* FORM */}
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5 w-full">
-
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex flex-col gap-5 w-full"
+          >
             {/* Name Field */}
             <div className="flex flex-col gap-2">
-              <label htmlFor="name" className={`font-semibold text-[14px] ${errors.name ? "text-red-500" : "text-[#404040]"}`}>
+              <label
+                htmlFor="name"
+                className={`font-semibold text-[14px] ${errors.name ? "text-red-500" : "text-[#404040]"}`}
+              >
                 Name
               </label>
               <input
@@ -127,12 +147,19 @@ export default function SignUpPage() {
                 placeholder="Your name or Organization"
                 className={`${inputBase} ${errors.name ? "border-red-500" : "border-[#D4D4D4]"}`}
               />
-              {errors.name && <p className="text-red-500 text-[12px]">{errors.name.message}</p>}
+              {errors.name && (
+                <p className="text-red-500 text-[12px]">
+                  {errors.name.message}
+                </p>
+              )}
             </div>
 
             {/* Email Field */}
             <div className="flex flex-col gap-2">
-              <label htmlFor="email" className={`font-semibold text-[14px] ${errors.email ? "text-red-500" : "text-[#404040]"}`}>
+              <label
+                htmlFor="email"
+                className={`font-semibold text-[14px] ${errors.email ? "text-red-500" : "text-[#404040]"}`}
+              >
                 Email
               </label>
               <input
@@ -142,12 +169,19 @@ export default function SignUpPage() {
                 placeholder="name@example.com"
                 className={`${inputBase} ${errors.email ? "border-red-500" : "border-[#D4D4D4]"}`}
               />
-              {errors.email && <p className="text-red-500 text-[12px]">{errors.email.message}</p>}
+              {errors.email && (
+                <p className="text-red-500 text-[12px]">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
 
             {/* Password Field */}
             <div className="flex flex-col gap-2 relative">
-              <label htmlFor="password" className={`font-semibold text-[14px] ${errors.password ? "text-red-500" : "text-[#404040]"}`}>
+              <label
+                htmlFor="password"
+                className={`font-semibold text-[14px] ${errors.password ? "text-red-500" : "text-[#404040]"}`}
+              >
                 Password
               </label>
               <div className="relative">
@@ -166,12 +200,19 @@ export default function SignUpPage() {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              {errors.password && <p className="text-red-500 text-[12px]">{errors.password.message}</p>}
+              {errors.password && (
+                <p className="text-red-500 text-[12px]">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
 
             {/* Confirm Password Field */}
             <div className="flex flex-col gap-2 relative">
-              <label htmlFor="confirmPassword" className={`font-semibold text-[14px] ${errors.confirmPassword ? "text-red-500" : "text-[#404040]"}`}>
+              <label
+                htmlFor="confirmPassword"
+                className={`font-semibold text-[14px] ${errors.confirmPassword ? "text-red-500" : "text-[#404040]"}`}
+              >
                 Confirm Password
               </label>
               <div className="relative">
@@ -183,7 +224,11 @@ export default function SignUpPage() {
                   className={`${inputBase} ${errors.confirmPassword ? "border-red-500" : "border-[#D4D4D4]"} pr-12`}
                 />
               </div>
-              {errors.confirmPassword && <p className="text-red-500 text-[12px]">{errors.confirmPassword.message}</p>}
+              {errors.confirmPassword && (
+                <p className="text-red-500 text-[12px]">
+                  {errors.confirmPassword.message}
+                </p>
+              )}
             </div>
 
             {/* Register Button */}
@@ -199,7 +244,10 @@ export default function SignUpPage() {
 
           <div className="text-center text-sm text-[#737373]">
             Already have an account?{" "}
-            <Link href="/login" className="underline font-bold text-[#171717] hover:text-black">
+            <Link
+              href="/login"
+              className="underline font-bold text-[#171717] hover:text-black"
+            >
               Login
             </Link>
           </div>
@@ -208,7 +256,14 @@ export default function SignUpPage() {
 
       <div className="text-12 text-center text-[#A3A3A3] max-w-[320px]">
         By clicking continue, you agree to our{" "}
-        <a href="#" className="underline">Terms of Service</a> and <a href="#" className="underline">Privacy Policy</a>.
+        <a href="#" className="underline">
+          Terms of Service
+        </a>{" "}
+        and{" "}
+        <a href="#" className="underline">
+          Privacy Policy
+        </a>
+        .
       </div>
     </div>
   );

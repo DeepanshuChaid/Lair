@@ -22,7 +22,10 @@ import (
 
 func main() {
 	// Load .env if present; ignore error if file not found (env vars set externally)
-	godotenv.Load()
+	err := godotenv.Load(".env")
+    if err != nil {
+		log.Fatal("ENV IS NOT WORKING YOU DUMB DUCK. Path: ", os.Getenv("PWD"), err.Error())
+    }
 	oauth.InitGoogleOAuth()
 
 	redisURL := os.Getenv("REDIS_URL")
@@ -31,7 +34,7 @@ func main() {
 	}
 
 	// cloudinary init
-	err := cloudinary.InitCloudinary(
+	err = cloudinary.InitCloudinary(
 		os.Getenv("CLOUDINARY_CLOUD_NAME"),
 		os.Getenv("CLOUDINARY_API_KEY"),
 		os.Getenv("CLOUDINARY_API_SECRET"),

@@ -59,7 +59,7 @@ export default function Canvas({
 
   // History management
   const historyRef = useRef<Array<{ id: string; layer: any }[]>>([]);
-  const historyIndexRef = useRef(-1);
+  const historyIndexRef = useRef(0);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 

@@ -67,3 +67,5 @@ cd client
 npm install
 npm run dev
 ```
+
+https://eblog.fly.dev/ginbad.html

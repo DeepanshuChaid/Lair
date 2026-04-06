@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -11,13 +12,15 @@ var Client *redis.Client
 
 func Init(redisURL string) error {
 	opt, err := redis.ParseURL(redisURL)
+	log.Println("redis url",  opt)
 	if err != nil {
 		return err
 	}
 
 	Client = redis.NewClient(opt)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 56*time.Second)
 	defer cancel()
 
 	_, err = Client.Ping(ctx).Result()
