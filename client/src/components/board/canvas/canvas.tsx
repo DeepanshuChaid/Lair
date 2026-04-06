@@ -733,7 +733,7 @@ export default function Canvas({
 
       setSelection((selection) => selection.filter((id) => id !== layerId));
     },
-    [dirtyLayers, saveToHistory],
+    [dirtyLayers, saveToHistory, rectangleLayers],
   );
 
   // --- POINTER EVENTS ---
