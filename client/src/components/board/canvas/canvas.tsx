@@ -136,6 +136,9 @@ export default function Canvas({
   const lastSentPencilRef = useRef<number>(0);
   const lastSentMoveRef = useRef(0);
 
+  // CONSIDERING MOBILE INTERACTIVITY WE NEED TO USE A REF TO MAKE SURE THAT THE EVENT WORK PROPERLY ON ALL DEVICES WITH EITHER TOUCH OR MOUSE
+  const isPointerDownRef = useRef(false);
+
   const [draftRectangleLayer, setDraftRectangleLayer] = useState<{
     id: string;
     layer: any;
@@ -476,13 +479,15 @@ export default function Canvas({
       (layer) => !selection.includes(layer.id),
     );
 
-    wsRef.current?.send(
-      JSON.stringify({
-        type: "LAYER_DELETE",
-        content: selection,
-        userId: user?.id,
-      }),
-    );
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current?.send(
+        JSON.stringify({
+          type: "LAYER_DELETE",
+          content: selection,
+          userId: user?.id,
+        }),
+      );
+    }
 
     setRectangleLayers(nextLayers);
     saveToHistory(nextLayers);
@@ -530,12 +535,14 @@ export default function Canvas({
         setRectangleLayers((prev) => [...prev, dupedLayer]);
         setSelection([dupedLayer.id]);
 
-        wsRef.current?.send(
-          JSON.stringify({
-            type: "LAYER_CREATE",
-            content: dupedLayer,
-          }),
-        );
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current?.send(
+            JSON.stringify({
+              type: "LAYER_CREATE",
+              content: dupedLayer,
+            }),
+          );
+        }
       }
     };
 
@@ -706,13 +713,15 @@ export default function Canvas({
     (layerId: string) => {
       dirtyLayers.current.set(layerId, { layer: null, status: "delete" });
 
-      wsRef?.current?.send(
-        JSON.stringify({
-          type: "LAYER_DELETE",
-          content: [layerId],
-          userId: user?.id,
-        }),
-      );
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef?.current?.send(
+          JSON.stringify({
+            type: "LAYER_DELETE",
+            content: [layerId],
+            userId: user?.id,
+          }),
+        );
+      }
 
       // Use state updater function to always work with current state
       // This prevents stale closures when erasing multiple layers quickly
@@ -731,6 +740,7 @@ export default function Canvas({
   const onSvgPointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       e.currentTarget.setPointerCapture(e.pointerId);
+      isPointerDownRef.current = true;
 
       const coords = clientToWorld(e.clientX, e.clientY);
       if (canvasState.mode === CanvasMode.None) {
@@ -764,13 +774,15 @@ export default function Canvas({
 
         setDraftRectangleLayer(draft);
 
-        wsRef.current?.send(
-          JSON.stringify({
-            type: "CREATE_DRAFT",
-            content: draft,
-            userId: user?.id,
-          }),
-        );
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current?.send(
+            JSON.stringify({
+              type: "CREATE_DRAFT",
+              content: draft,
+              userId: user?.id,
+            }),
+          );
+        }
       }
 
       if (canvasState.mode === CanvasMode.Eraser) {
@@ -787,7 +799,7 @@ export default function Canvas({
       const coords = clientToWorld(e.clientX, e.clientY);
 
       // ---- ERASER DRAG ----
-      if (canvasState.mode === CanvasMode.Eraser) {
+      if (canvasState.mode === CanvasMode.Eraser && isPointerDownRef.current) {
         const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers);
         if (hitId) eraseLayer(hitId);
 
@@ -894,6 +906,8 @@ export default function Canvas({
     (e: React.PointerEvent<SVGSVGElement>) => {
       const coords = clientToWorld(e.clientX, e.clientY);
 
+      isPointerDownRef.current = false;
+
       // --- PENCIL FINALIZATION ---
       if (canvasState.mode === CanvasMode.Pencil) {
         if (canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
@@ -918,13 +932,15 @@ export default function Canvas({
           saveToHistory(nextLayers);
           onLayerChange(newId, newLayer);
 
-          wsRef.current?.send(
-            JSON.stringify({
-              type: "LAYER_UPDATE_DELTA",
-              content: [{ id: newId, layer: newLayer }],
-              userId: user?.id,
-            }),
-          );
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current?.send(
+              JSON.stringify({
+                type: "LAYER_UPDATE_DELTA",
+                content: [{ id: newId, layer: newLayer }],
+                userId: user?.id,
+              }),
+            );
+          }
         }
 
         // ✅ ALWAYS reset (this is the fix)
@@ -971,23 +987,27 @@ export default function Canvas({
         saveToHistory(nextLayers);
 
         // BROADCAST CREATE
-        wsRef.current?.send(
-          JSON.stringify({
-            type: "LAYER_UPDATE_DELTA",
-            content: [{ id: newId, layer: newLayer }],
-            userId: user?.id,
-          }),
-        );
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current?.send(
+            JSON.stringify({
+              type: "LAYER_UPDATE_DELTA",
+              content: [{ id: newId, layer: newLayer }],
+              userId: user?.id,
+            }),
+          );
+        }
 
         insertingStartRef.current = null;
         setDraftRectangleLayer(null);
 
-        wsRef?.current?.send(
-          JSON.stringify({
-            type: "CREATE_DRAFT",
-            content: null,
-          }),
-        );
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef?.current?.send(
+            JSON.stringify({
+              type: "CREATE_DRAFT",
+              content: null,
+            }),
+          );
+        }
 
         setCanvasState({ mode: CanvasMode.None });
       }
@@ -1350,13 +1370,15 @@ export default function Canvas({
             layer: l.layer,
           }));
 
-        wsRef.current?.send(
-          JSON.stringify({
-            type: "LAYER_UPDATE_DELTA",
-            content: transformPayload,
-            userId: user?.id,
-          }),
-        );
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current?.send(
+            JSON.stringify({
+              type: "LAYER_UPDATE_DELTA",
+              content: transformPayload,
+              userId: user?.id,
+            }),
+          );
+        }
 
         translatingBaseLayersRef.current = [];
       }
@@ -1430,14 +1452,15 @@ export default function Canvas({
           .filter((l) => selection.includes(l.id))
           .map((l) => ({ id: l.id, layer: l.layer }));
 
-        wsRef.current?.send(
-          JSON.stringify({
-            type: "LAYER_UPDATE_DELTA",
-            content: transformPayload,
-            userId: user?.id,
-          }),
-        );
-
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current?.send(
+            JSON.stringify({
+              type: "LAYER_UPDATE_DELTA",
+              content: transformPayload,
+              userId: user?.id,
+            }),
+          );
+        }
         resizingBaseLayersRef.current = [];
 
         if (selectionBoxRef.current) {
@@ -1521,13 +1544,15 @@ export default function Canvas({
               layer,
               status: "update",
             });
-            wsRef.current?.send(
-              JSON.stringify({
-                type: "LAYER_UPDATE_DELTA",
-                content: [{ id, layer }],
-                userId: user?.id,
-              }),
-            );
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current?.send(
+                JSON.stringify({
+                  type: "LAYER_UPDATE_DELTA",
+                  content: [{ id, layer }],
+                  userId: user?.id,
+                }),
+              );
+            }
           }
         });
       }
