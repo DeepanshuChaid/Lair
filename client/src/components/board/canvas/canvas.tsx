@@ -714,12 +714,17 @@ export default function Canvas({
         }),
       );
 
-      const nextLayers = rectangleLayers.filter((l) => l.id !== layerId);
-      setRectangleLayers(nextLayers);
-      saveToHistory(nextLayers);
+      // Use state updater function to always work with current state
+      // This prevents stale closures when erasing multiple layers quickly
+      setRectangleLayers((currentLayers) => {
+        const nextLayers = currentLayers.filter((l) => l.id !== layerId);
+        saveToHistory(nextLayers);
+        return nextLayers;
+      });
+
       setSelection((selection) => selection.filter((id) => id !== layerId));
     },
-    [rectangleLayers, dirtyLayers, saveToHistory],
+    [dirtyLayers, saveToHistory],
   );
 
   // --- POINTER EVENTS ---
@@ -774,7 +779,7 @@ export default function Canvas({
         return;
       }
     },
-    [canvasState, clientToWorld],
+    [canvasState, clientToWorld, rectangleLayers, eraseLayer],
   );
 
   const onSvgPointerMove = useCallback(
@@ -782,8 +787,7 @@ export default function Canvas({
       const coords = clientToWorld(e.clientX, e.clientY);
 
       // ---- ERASER DRAG ----
-      // e.button === 1 means the user is currently holding left-click while moving
-      if (canvasState.mode === CanvasMode.Eraser && e.buttons === 1) {
+      if (canvasState.mode === CanvasMode.Eraser) {
         const hitId = findLayerByPoint(coords.x, coords.y, rectangleLayers);
         if (hitId) eraseLayer(hitId);
 
@@ -882,7 +886,7 @@ export default function Canvas({
         }
       }
     },
-    [canvasState, clientToWorld, lastUsedColor],
+    [canvasState, clientToWorld, lastUsedColor, rectangleLayers, eraseLayer],
   );
 
   // --- 1. The SVG Specific Handler ---
