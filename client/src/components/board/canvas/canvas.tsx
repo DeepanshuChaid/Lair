@@ -894,6 +894,7 @@ export default function Canvas({
       if (canvasState.mode === CanvasMode.Pencil) {
         if (canvasState.pencilPoints && canvasState.pencilPoints.length > 1) {
           const newId = `path-${Math.random().toString(36).substr(2, 9)}`;
+
           const newLayer = {
             type: layerType.Path,
             x: 0,
@@ -908,23 +909,25 @@ export default function Canvas({
             ...rectangleLayers,
             { id: newId, layer: newLayer },
           ];
+
           setRectangleLayers(nextLayers);
           saveToHistory(nextLayers);
-
-          // saveState(JSON.stringify(nextLayers));
           onLayerChange(newId, newLayer);
 
-          // BROADCAST CREATE
           wsRef.current?.send(
             JSON.stringify({
-              type: "LAYER_UPDATE_DELTA", // The receiver algo handles "push if not exists"
+              type: "LAYER_UPDATE_DELTA",
               content: [{ id: newId, layer: newLayer }],
               userId: user?.id,
             }),
           );
-
-          setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
         }
+
+        // ✅ ALWAYS reset (this is the fix)
+        setCanvasState({
+          mode: CanvasMode.Pencil,
+          pencilPoints: [],
+        });
       }
 
       // --- SHAPE FINALIZATION (Rectangle, Ellipse, Note, Text) ---
