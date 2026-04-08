@@ -56,6 +56,9 @@ export default function Canvas({
     Array<{ id: string; layer: any }>
   >([]);
   const [selection, setSelection] = useState<string[]>([]);
+  const selectionNetRef = useRef<SVGSVGElement>();
+
+  const [currentMouse, setCurrentMouse] = useState<Point | null>(null);
 
   // History management
   const historyRef = useRef<Array<{ id: string; layer: any }[]>>([]);
@@ -744,7 +747,7 @@ export default function Canvas({
 
       const coords = clientToWorld(e.clientX, e.clientY);
       if (canvasState.mode === CanvasMode.None) {
-        if (selection.length < 2) setSelection([]);
+        setSelection([]);
         setCanvasState({ mode: CanvasMode.SelectionNet, origin: coords });
       } else if (canvasState.mode === CanvasMode.Pencil) {
         setCanvasState({
@@ -790,6 +793,8 @@ export default function Canvas({
         if (hitId) eraseLayer(hitId);
         return;
       }
+
+      setCurrentMouse(coords);
     },
     [canvasState, clientToWorld, rectangleLayers, eraseLayer],
   );
@@ -804,6 +809,45 @@ export default function Canvas({
         if (hitId) eraseLayer(hitId);
 
         return;
+      }
+
+      if (canvasState.mode === CanvasMode.SelectionNet) {
+        const origin = canvasState.origin;
+        const coords = clientToWorld(e.clientX, e.clientY);
+
+        const x = Math.min(origin.x, coords.x);
+        const y = Math.min(origin.y, coords.y);
+        const width = Math.abs(coords.x - origin.x);
+        const height = Math.abs(coords.y - origin.y);
+
+        const node = selectionNetRef.current;
+        if (!node) return;
+
+        // IMPORTANT: match how your components render internally
+
+        node.setAttribute("transform", `translate(${x}, ${y})`);
+
+        const tag = node.tagName.toLowerCase();
+
+        if (tag === "rect" || tag === "foreignobject") {
+          node.setAttribute("width", width.toString());
+          node.setAttribute("height", height.toString());
+        }
+
+        const selected = rectangleLayers
+          .filter((l) => {
+            const lx = l.layer.x;
+            const ly = l.layer.y;
+            const lw = l.layer.width;
+            const lh = l.layer.height;
+
+            return (
+              lx < x + width && lx + lw > x && ly < y + height && ly + lh > y
+            );
+          })
+          .map((l) => l.id);
+
+        setSelection(selected);
       }
 
       // FIX: Only update pencil points if we are in Pencil mode AND currently drawing (pencilPoints has data)
@@ -905,7 +949,7 @@ export default function Canvas({
   const onSvgPointerUp = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       const coords = clientToWorld(e.clientX, e.clientY);
-
+      setCurrentMouse(null);
       isPointerDownRef.current = false;
 
       // --- PENCIL FINALIZATION ---
@@ -948,6 +992,10 @@ export default function Canvas({
           mode: CanvasMode.Pencil,
           pencilPoints: [],
         });
+      }
+
+      if (canvasState.mode === CanvasMode.SelectionNet) {
+        setCanvasState({ mode: CanvasMode.None });
       }
 
       // --- SHAPE FINALIZATION (Rectangle, Ellipse, Note, Text) ---
@@ -1054,10 +1102,6 @@ export default function Canvas({
   const onLayerPointerDown = useCallback(
     (e: React.PointerEvent, layerId: string) => {
       if (canvasState.mode === CanvasMode.Eraser) return;
-      if (selection.length > 1) {
-        console.log("HIT DOUBLE SECLECTION BOX");
-        return;
-      }
       // prevent selection if i m erasing
       if (
         canvasState.mode === CanvasMode.Inserting ||
@@ -1072,20 +1116,17 @@ export default function Canvas({
         layer: { ...l.layer },
       }));
 
-      setSelection(
-        e.shiftKey
-          ? (prev) =>
-              prev.includes(layerId)
-                ? prev.filter((id) => id !== layerId)
-                : [...prev, layerId]
-          : [layerId],
-      );
-      setCanvasState({ mode: CanvasMode.Translating, current: coords });
+      const newSelection = e.shiftKey
+        ? selection.includes(layerId)
+          ? selection.filter((id) => id !== layerId)
+          : [...selection, layerId]
+        : [layerId];
+
+      setSelection(newSelection);
 
       const start = new Map();
-
       rectangleLayers.forEach((l) => {
-        if (selection.includes(l.id) || l.id === layerId) {
+        if (newSelection.includes(l.id)) {
           start.set(l.id, { x: l.layer.x, y: l.layer.y });
         }
       });
@@ -1096,10 +1137,6 @@ export default function Canvas({
     },
     [canvasState.mode, clientToWorld, rectangleLayers],
   );
-
-  useEffect(() => {
-    console.log(selection);
-  }, [selection]);
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -1790,6 +1827,15 @@ export default function Canvas({
           </g>
 
           <CursorPresence />
+
+          {canvasState.mode === CanvasMode.SelectionNet && (
+            <rect
+              ref={selectionNetRef}
+              fill="rgba(0,0,255,0.1)"
+              stroke="blue"
+              strokeDasharray="4"
+            />
+          )}
 
           {Object.entries(othersDraftLayers).map(([userId, draft]) => {
             if (!draft) return null;
