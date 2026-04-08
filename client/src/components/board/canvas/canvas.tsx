@@ -744,7 +744,7 @@ export default function Canvas({
 
       const coords = clientToWorld(e.clientX, e.clientY);
       if (canvasState.mode === CanvasMode.None) {
-        setSelection([]);
+        if (selection.length < 2) setSelection([]);
         setCanvasState({ mode: CanvasMode.SelectionNet, origin: coords });
       } else if (canvasState.mode === CanvasMode.Pencil) {
         setCanvasState({
@@ -1054,6 +1054,10 @@ export default function Canvas({
   const onLayerPointerDown = useCallback(
     (e: React.PointerEvent, layerId: string) => {
       if (canvasState.mode === CanvasMode.Eraser) return;
+      if (selection.length > 1) {
+        console.log("HIT DOUBLE SECLECTION BOX");
+        return;
+      }
       // prevent selection if i m erasing
       if (
         canvasState.mode === CanvasMode.Inserting ||
@@ -1092,6 +1096,10 @@ export default function Canvas({
     },
     [canvasState.mode, clientToWorld, rectangleLayers],
   );
+
+  useEffect(() => {
+    console.log(selection);
+  }, [selection]);
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
