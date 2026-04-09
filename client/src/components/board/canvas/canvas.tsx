@@ -1100,13 +1100,15 @@ export default function Canvas({
   const onLayerPointerDown = useCallback(
     (e: React.PointerEvent, layerId: string) => {
       if (canvasState.mode === CanvasMode.Eraser) return;
-      // prevent selection if i m erasing
+
       if (
         canvasState.mode === CanvasMode.Inserting ||
         canvasState.mode === CanvasMode.Pencil
       )
         return;
+
       e.stopPropagation();
+
       const coords = clientToWorld(e.clientX, e.clientY);
 
       translatingBaseLayersRef.current = rectangleLayers.map((l) => ({
@@ -1114,13 +1116,14 @@ export default function Canvas({
         layer: { ...l.layer },
       }));
 
-      const newSelection = e.shiftKey
-        ? selection.includes(layerId)
-          ? selection.filter((id) => id !== layerId)
-          : [...selection, layerId]
-        : [layerId];
+      let newSelection = selection;
 
-      setSelection(newSelection);
+      // ✅ ONLY change selection if needed
+      if (!selection.includes(layerId)) {
+        newSelection = e.shiftKey ? [...selection, layerId] : [layerId];
+
+        setSelection(newSelection);
+      }
 
       const start = new Map();
       rectangleLayers.forEach((l) => {
@@ -1133,7 +1136,7 @@ export default function Canvas({
 
       setCanvasState({ mode: CanvasMode.Translating, current: coords });
     },
-    [canvasState.mode, clientToWorld, rectangleLayers],
+    [canvasState.mode, clientToWorld, rectangleLayers, selection],
   );
 
   const onPointerMove = useCallback(
