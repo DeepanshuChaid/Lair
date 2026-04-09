@@ -56,7 +56,7 @@ export default function Canvas({
     Array<{ id: string; layer: any }>
   >([]);
   const [selection, setSelection] = useState<string[]>([]);
-  const selectionNetRef = useRef<SVGSVGElement>();
+  const selectionNetRef = useRef<SVGSVGElement>(null);
 
   const [currentMouse, setCurrentMouse] = useState<Point | null>(null);
 
