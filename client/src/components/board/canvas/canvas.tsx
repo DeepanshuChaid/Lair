@@ -58,8 +58,6 @@ export default function Canvas({
   const [selection, setSelection] = useState<string[]>([]);
   const selectionNetRef = useRef<SVGSVGElement>(null);
 
-  const [currentMouse, setCurrentMouse] = useState<Point | null>(null);
-
   // History management
   const historyRef = useRef<Array<{ id: string; layer: any }[]>>([]);
   const historyIndexRef = useRef(0);
@@ -793,8 +791,6 @@ export default function Canvas({
         if (hitId) eraseLayer(hitId);
         return;
       }
-
-      setCurrentMouse(coords);
     },
     [canvasState, clientToWorld, rectangleLayers, eraseLayer],
   );
@@ -949,7 +945,6 @@ export default function Canvas({
   const onSvgPointerUp = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       const coords = clientToWorld(e.clientX, e.clientY);
-      setCurrentMouse(null);
       isPointerDownRef.current = false;
 
       // --- PENCIL FINALIZATION ---
