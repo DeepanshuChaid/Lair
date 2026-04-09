@@ -1124,6 +1124,7 @@ export default function Canvas({
 
         setSelection(newSelection);
       }
+      // pushing to main for actions
 
       const start = new Map();
       rectangleLayers.forEach((l) => {
