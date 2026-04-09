@@ -356,19 +356,22 @@ export default function Canvas({
           }
 
           if (data.type === "LAYER_MOVE") {
-            const id = data.content.id;
-            const node = layerRefs.current.get(id);
+            const moved = data.content; // array
 
-            if (selectionRef.current.includes(id)) {
-              setSelection([]);
-            }
+            moved.forEach((item: any) => {
+              const node = layerRefs.current.get(item.id);
 
-            // All layers now use transform="translate(x, y)" — set it directly.
-            // The old attr:{x,y} approach was stacking on top of the transform and causing 700px jumps.
-            if (node) {
-              const targetTransform = `translate(${data.content.x}, ${data.content.y})`;
-              node.setAttribute("transform", targetTransform);
-            }
+              if (selectionRef.current.includes(item.id)) {
+                setSelection([]);
+              }
+
+              if (node) {
+                node.setAttribute(
+                  "transform",
+                  `translate(${item.x}, ${item.y})`,
+                );
+              }
+            });
           }
 
           if (data.type === "LAYER_RESIZE") {
@@ -1145,7 +1148,7 @@ export default function Canvas({
         };
         const startState = dragStartlayersRef.current;
 
-        let firstMovedLayer: any = null;
+        let movedLayers: { id: string; x: number; y: number }[] = [];
 
         selection.forEach((id) => {
           const startPos = startState.get(id);
@@ -1154,7 +1157,7 @@ export default function Canvas({
           const newX = startPos.x + offset.x;
           const newY = startPos.y + offset.y;
 
-          if (!firstMovedLayer) firstMovedLayer = { id, x: newX, y: newY };
+          movedLayers.push({ id, x: newX, y: newY });
 
           const node = layerRefs.current.get(id);
           if (node) {
@@ -1171,19 +1174,16 @@ export default function Canvas({
 
         const now = Date.now();
         if (
-          firstMovedLayer &&
+          movedLayers.length > 0 &&
           now - lastSentMoveRef.current > 25 &&
           wsRef.current?.readyState === WebSocket.OPEN
         ) {
           lastSentMoveRef.current = now;
-          wsRef.current?.send(
+
+          wsRef.current.send(
             JSON.stringify({
               type: "LAYER_MOVE",
-              content: {
-                id: firstMovedLayer.id,
-                x: firstMovedLayer.x,
-                y: firstMovedLayer.y,
-              },
+              content: movedLayers,
               userId: user?.id,
             }),
           );
