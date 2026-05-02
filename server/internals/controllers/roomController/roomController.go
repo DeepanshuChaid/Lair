@@ -2,6 +2,7 @@ package roomController
 
 import (
 	"context"
+	"math/rand"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -54,7 +55,7 @@ func GetUserRooms() gin.HandlerFunc {
 
 		rows, err := database.Pool.Query(
 			ctx,
-			"SELECT id, title, description, is_public, thumbnail_url, created_at, updated_at FROM rooms WHERE owner_id = $1",
+			"SELECT id, title, description, is_public, thumbnail_url, created_at, updated_at, join_code FROM rooms WHERE owner_id = $1",
 			userId,
 		)
 		if err != nil {
@@ -66,13 +67,14 @@ func GetUserRooms() gin.HandlerFunc {
 		for rows.Next() {
 			var room roomModel.Room
 			if err := rows.Scan(
-				&room.ID,
-				&room.Title,
-				&room.Description,
-				&room.IsPublic,
-				&room.Thumbnail,
-				&room.CreatedAt,
-				&room.UpdatedAt,
+				&room.ID,          // 1
+				&room.Title,       // 2
+				&room.Description, // 3
+				&room.IsPublic,    // 4
+				&room.Thumbnail,   // 5
+				&room.CreatedAt,   // 6 (This matches created_at)
+				&room.UpdatedAt,   // 7 (This matches updated_at)
+            	&room.JoinCode,
 			); err != nil {
 				c.JSON(500, gin.H{"message": "Database error", "details": err.Error()})
 				return
@@ -94,10 +96,22 @@ func GetUserRooms() gin.HandlerFunc {
 	}
 }
 
+var letters = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func generateJoinCode(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 // ==================================== //
-//
 //	Create Room            //
-//
 // ==================================== //
 func CreateRoom() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -127,6 +141,7 @@ func CreateRoom() gin.HandlerFunc {
 		}
 
 		var roomId string
+		var joinCode string
 
 		tx, err := database.Pool.Begin(ctx)
 		if err != nil {
@@ -135,16 +150,34 @@ func CreateRoom() gin.HandlerFunc {
 		}
 		defer tx.Rollback(ctx)
 
-		// create room
-		err = tx.QueryRow(ctx,
-			"INSERT INTO rooms (owner_id, title, description, is_public) VALUES ($1, $2, $3, $4) RETURNING id",
-			userId,
-			body.Title,
-			body.Description,
-			body.IsPublic,
-		).Scan(&roomId)
-		if err != nil {
+		// generate + insert (simple retry once)
+		for i := 0; i < 2; i++ {
+			joinCode = generateJoinCode(6)
+
+			err = tx.QueryRow(ctx,
+				"INSERT INTO rooms (owner_id, title, description, is_public, join_code) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+				userId,
+				body.Title,
+				body.Description,
+				body.IsPublic,
+				joinCode,
+			).Scan(&roomId)
+
+			if err == nil {
+				break
+			}
+
+			// retry only if duplicate
+			if strings.Contains(err.Error(), "duplicate") {
+				continue
+			}
+
 			c.JSON(500, gin.H{"message": "Failed to create room"})
+			return
+		}
+
+		if roomId == "" {
+			c.JSON(500, gin.H{"message": "Failed to generate join code"})
 			return
 		}
 
@@ -154,7 +187,7 @@ func CreateRoom() gin.HandlerFunc {
 			roomId, userId,
 		)
 		if err != nil {
-			c.JSON(500, gin.H{"message": "Failed to add owner", "details": err.Error()})
+			c.JSON(500, gin.H{"message": "Failed to add owner"})
 			return
 		}
 
@@ -164,15 +197,12 @@ func CreateRoom() gin.HandlerFunc {
 			return
 		}
 
-		err = cache.Delete(ctx, "rooms:"+userId)
-		if err != nil {
-			c.JSON(500, gin.H{"message": "Failed to delete cached data"})
-			return
-		}
+		_ = cache.Delete(ctx, "rooms:"+userId)
 
 		c.JSON(http.StatusCreated, gin.H{
-			"message": "Room created successfully",
-			"roomId":  roomId,
+			"message":  "Room created successfully",
+			"roomId":   roomId,
+			"joinCode": joinCode,
 		})
 	}
 }
@@ -336,17 +366,17 @@ func GetRoomMembers() gin.HandlerFunc {
 		// 1. CACHE CHECK
         val, err := cache.Get(ctx, "members:"+roomId)
         if err == nil {
-            // val is the stringified 'room' object. 
+            // val is the stringified 'room' object.
             // We wrap it in the "room" key manually to avoid double-marshaling.
             c.Header("Content-Type", "application/json")
-            c.String(http.StatusOK, `{"room": %s}`, val) 
+            c.String(http.StatusOK, `{"room": %s}`, val)
             return
         }
 
 		// Using a single query to get Room + State + Members array
 		// We use COALESCE to handle rooms that might not have members yet
 		query := `
-            SELECT 
+            SELECT
 				COALESCE(json_agg(json_build_object(
 					'id', u.id,
 					'name', u.name,
@@ -461,6 +491,48 @@ func UpdateRoomThumbnail() gin.HandlerFunc {
 			"message":   "Thumbnail updated successfully",
 			"roomId":    roomId,
 			"thumbnail": imageUrl,
+		})
+	}
+}
+
+func GetJoinCode() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		userId := c.GetString("userId")
+		if userId == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+			return
+		}
+
+		joinCode := strings.TrimSpace(c.Query("joinCode"))
+		if joinCode == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Join code required"})
+			return
+		}
+
+		var roomID string
+		err := database.Pool.QueryRow(
+			ctx,
+			`SELECT id FROM rooms WHERE join_code = $1`,
+			strings.ToUpper(joinCode),
+		).Scan(&roomID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"message": "Room not found for this code"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "Failed Retrieving the room id Using The code",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Here is your Room Id master!",
+			"roomId":  roomID,
 		})
 	}
 }

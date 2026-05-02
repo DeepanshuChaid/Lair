@@ -1,7 +1,7 @@
 package roomModel
 
 import "time"
-
+// HI
 type Room struct {
 	ID          string `json:"id"`
 	OwnerId     string `json:"ownerId"`
@@ -13,6 +13,8 @@ type Room struct {
 	Thumbnail *string `json:"thumbnail"`
 
 	Version int `json:"version"`
+
+	JoinCode string `json:"join_code"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -30,7 +32,7 @@ type RoomMember struct {
 type Layers struct {
 	ID string `json:"id"`
 	RoomId string `json:"roomId"`
-	
+
 	LayerData string `json:"layerData"`
 }
 
