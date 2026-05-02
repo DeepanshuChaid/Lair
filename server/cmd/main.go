@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -24,7 +25,7 @@ func main() {
 	// Load .env if present; ignore error if file not found (env vars set externally)
 	err := godotenv.Load(".env")
     if err != nil {
-		log.Fatal("ENV IS NOT WORKING YOU DUMB DUCK. Path: ", os.Getenv("PWD"), err.Error())
+		fmt.Println("ENV IS NOT WORKING YOU DUMB DUCK. Path: ", os.Getenv("PWD"), err.Error())
     }
 	oauth.InitGoogleOAuth()
 
