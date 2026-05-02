@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch"; // Ensure you have this shadcn component
 import { Label } from "@/components/ui/label";
 import { Plus, Loader, Globe, Lock } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea"
+import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,7 +34,7 @@ const formSchema = z.object({
   description: z
     .string()
     .min(1, "Description is required")
-    .min(3, "Description must be at least 3 characters")  
+    .min(3, "Description must be at least 3 characters")
     .max(100, "Description must be less than 100 characters")
     .trim(),
   is_public: z.boolean(),
@@ -100,11 +100,13 @@ export const NewBoardDialog = () => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {/* We replaced the white-on-white button with a styled one more fitting for the dashboard header, feel free to change it */}
-        <button className="flex items-center gap-2 px-4 py-[10px] bg-[#171717] hover:bg-[#262626] text-white rounded-[8px] text-[14px] font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20">
-          <Plus className="h-4 w-4" />
+        <Button
+          type="button"
+          className="h-10 gap-1.5 px-2.5 text-xs sm:text-sm bg-[#171717] hover:bg-[#262626] text-white"
+        >
+          <Plus className="h-6 w-6" />
           New Board
-        </button>
+        </Button>
       </DialogTrigger>
 
       <DialogContent className="p-6 max-w-[480px]">
@@ -138,17 +140,25 @@ export const NewBoardDialog = () => {
                 id="description"
                 placeholder="What is this room about? (min 3, max 100 characters)"
                 {...register("description")}
-                className={errors.description ? "border-red-500 min-h-[100px]" : "min-h-[100px]"}
+                className={
+                  errors.description
+                    ? "border-red-500 min-h-[100px]"
+                    : "min-h-[100px]"
+                }
               />
               {errors.description && (
-                <p className="text-red-500 text-xs">{errors.description.message}</p>
+                <p className="text-red-500 text-xs">
+                  {errors.description.message}
+                </p>
               )}
             </div>
 
             {/* Public/Private Toggle Area */}
             <div className="flex items-center justify-between rounded-lg border p-4 shadow-sm bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${isPublicValue ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-600'}`}>
+                <div
+                  className={`p-2 rounded-full ${isPublicValue ? "bg-blue-100 text-blue-600" : "bg-gray-200 text-gray-600"}`}
+                >
                   {isPublicValue ? <Globe size={18} /> : <Lock size={18} />}
                 </div>
                 <div className="space-y-0.5">
@@ -186,7 +196,11 @@ export const NewBoardDialog = () => {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="min-w-[100px]">
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="min-w-[100px]"
+            >
               {isSubmitting ? (
                 <Loader className="animate-spin" size={18} />
               ) : (
@@ -198,4 +212,4 @@ export const NewBoardDialog = () => {
       </DialogContent>
     </Dialog>
   );
-}
+};
