@@ -56,6 +56,7 @@ export default function Canvas({
     Array<{ id: string; layer: any }>
   >([]);
   const [selection, setSelection] = useState<string[]>([]);
+  const selectionNetRef = useRef<SVGRectElement>(null);
 
   // History management
   const historyRef = useRef<Array<{ id: string; layer: any }[]>>([]);
@@ -355,19 +356,22 @@ export default function Canvas({
           }
 
           if (data.type === "LAYER_MOVE") {
-            const id = data.content.id;
-            const node = layerRefs.current.get(id);
+            const moved = data.content; // array
 
-            if (selectionRef.current.includes(id)) {
-              setSelection([]);
-            }
+            moved.forEach((item: any) => {
+              const node = layerRefs.current.get(item.id);
 
-            // All layers now use transform="translate(x, y)" — set it directly.
-            // The old attr:{x,y} approach was stacking on top of the transform and causing 700px jumps.
-            if (node) {
-              const targetTransform = `translate(${data.content.x}, ${data.content.y})`;
-              node.setAttribute("transform", targetTransform);
-            }
+              if (selectionRef.current.includes(item.id)) {
+                setSelection([]);
+              }
+
+              if (node) {
+                node.setAttribute(
+                  "transform",
+                  `translate(${item.x}, ${item.y})`,
+                );
+              }
+            });
           }
 
           if (data.type === "LAYER_RESIZE") {
@@ -588,11 +592,21 @@ export default function Canvas({
     lastPanX: null,
     lastPanY: null,
   });
+  const isMultiTouchGestureRef = useRef(false);
+  const suppressTouchPointerRef = useRef(false);
 
   const onTouchStart = useCallback(
     (e: TouchEvent) => {
       if (e.touches.length === 2) {
         e.preventDefault();
+        isMultiTouchGestureRef.current = true;
+        suppressTouchPointerRef.current = true;
+        isPointerDownRef.current = false;
+        if (canvasState.mode === CanvasMode.SelectionNet) {
+          setCanvasState({ mode: CanvasMode.None });
+        } else if (canvasState.mode === CanvasMode.Pencil) {
+          setCanvasState({ mode: CanvasMode.Pencil, pencilPoints: [] });
+        }
         const touch1 = e.touches[0];
         const touch2 = e.touches[1];
         const dx = touch2.clientX - touch1.clientX;
@@ -606,6 +620,9 @@ export default function Canvas({
         e.touches.length === 1 &&
         canvasState.mode === CanvasMode.None
       ) {
+        if (!isMultiTouchGestureRef.current) {
+          suppressTouchPointerRef.current = false;
+        }
         const touch = e.touches[0];
         touchStateRef.current.panStartX = touch.clientX;
         touchStateRef.current.panStartY = touch.clientY;
@@ -624,6 +641,7 @@ export default function Canvas({
         touchStateRef.current.initialDistance !== null
       ) {
         e.preventDefault();
+        isMultiTouchGestureRef.current = true;
         const touch1 = e.touches[0];
         const touch2 = e.touches[1];
         const dx = touch2.clientX - touch1.clientX;
@@ -675,6 +693,10 @@ export default function Canvas({
   );
 
   const onTouchEnd = useCallback((e: TouchEvent) => {
+    if (e.touches.length === 0) {
+      isMultiTouchGestureRef.current = false;
+      suppressTouchPointerRef.current = false;
+    }
     touchStateRef.current.initialDistance = null;
     touchStateRef.current.initialScale = null;
     touchStateRef.current.panStartX = null;
@@ -739,12 +761,29 @@ export default function Canvas({
   // --- POINTER EVENTS ---
   const onSvgPointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
+      if (
+        e.pointerType === "touch" &&
+        (suppressTouchPointerRef.current ||
+          e.buttons === 0 ||
+          !e.isPrimary ||
+          isMultiTouchGestureRef.current)
+      ) {
+        return;
+      }
+
+      // Mobile: empty-space touch should pan via touch handlers, not create selection net.
+      if (e.pointerType === "touch" && canvasState.mode === CanvasMode.None) {
+        return;
+      }
+
+      // 1. If it's a touch event, don't start selection if we're already panning/zooming
+      // or if we want to reserve multi-touch for camera.
       e.currentTarget.setPointerCapture(e.pointerId);
       isPointerDownRef.current = true;
 
       const coords = clientToWorld(e.clientX, e.clientY);
       if (canvasState.mode === CanvasMode.None) {
-        if (selection.length < 2) setSelection([]);
+        setSelection([]);
         setCanvasState({ mode: CanvasMode.SelectionNet, origin: coords });
       } else if (canvasState.mode === CanvasMode.Pencil) {
         setCanvasState({
@@ -796,6 +835,15 @@ export default function Canvas({
 
   const onSvgPointerMove = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
+      if (
+        e.pointerType === "touch" &&
+        (!e.isPrimary ||
+          isMultiTouchGestureRef.current ||
+          suppressTouchPointerRef.current)
+      ) {
+        return;
+      }
+
       const coords = clientToWorld(e.clientX, e.clientY);
 
       // ---- ERASER DRAG ----
@@ -804,6 +852,45 @@ export default function Canvas({
         if (hitId) eraseLayer(hitId);
 
         return;
+      }
+
+      if (canvasState.mode === CanvasMode.SelectionNet) {
+        const origin = canvasState.origin;
+        const coords = clientToWorld(e.clientX, e.clientY);
+
+        const x = Math.min(origin.x, coords.x);
+        const y = Math.min(origin.y, coords.y);
+        const width = Math.abs(coords.x - origin.x);
+        const height = Math.abs(coords.y - origin.y);
+
+        const node = selectionNetRef.current;
+        if (!node) return;
+
+        // IMPORTANT: match how your components render internally
+
+        node.setAttribute("transform", `translate(${x}, ${y})`);
+
+        const tag = node.tagName.toLowerCase();
+
+        if (tag === "rect" || tag === "foreignobject") {
+          node.setAttribute("width", width.toString());
+          node.setAttribute("height", height.toString());
+        }
+
+        const selected = rectangleLayers
+          .filter((l) => {
+            const lx = l.layer.x;
+            const ly = l.layer.y;
+            const lw = l.layer.width;
+            const lh = l.layer.height;
+
+            return (
+              lx < x + width && lx + lw > x && ly < y + height && ly + lh > y
+            );
+          })
+          .map((l) => l.id);
+
+        setSelection(selected);
       }
 
       // FIX: Only update pencil points if we are in Pencil mode AND currently drawing (pencilPoints has data)
@@ -904,8 +991,14 @@ export default function Canvas({
   // --- 1. The SVG Specific Handler ---
   const onSvgPointerUp = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
-      const coords = clientToWorld(e.clientX, e.clientY);
+      if (
+        e.pointerType === "touch" &&
+        (isMultiTouchGestureRef.current || suppressTouchPointerRef.current)
+      ) {
+        return;
+      }
 
+      const coords = clientToWorld(e.clientX, e.clientY);
       isPointerDownRef.current = false;
 
       // --- PENCIL FINALIZATION ---
@@ -948,6 +1041,10 @@ export default function Canvas({
           mode: CanvasMode.Pencil,
           pencilPoints: [],
         });
+      }
+
+      if (canvasState.mode === CanvasMode.SelectionNet) {
+        setCanvasState({ mode: CanvasMode.None });
       }
 
       // --- SHAPE FINALIZATION (Rectangle, Ellipse, Note, Text) ---
@@ -1054,17 +1151,15 @@ export default function Canvas({
   const onLayerPointerDown = useCallback(
     (e: React.PointerEvent, layerId: string) => {
       if (canvasState.mode === CanvasMode.Eraser) return;
-      if (selection.length > 1) {
-        console.log("HIT DOUBLE SECLECTION BOX");
-        return;
-      }
-      // prevent selection if i m erasing
+
       if (
         canvasState.mode === CanvasMode.Inserting ||
         canvasState.mode === CanvasMode.Pencil
       )
         return;
+
       e.stopPropagation();
+
       const coords = clientToWorld(e.clientX, e.clientY);
 
       translatingBaseLayersRef.current = rectangleLayers.map((l) => ({
@@ -1072,20 +1167,19 @@ export default function Canvas({
         layer: { ...l.layer },
       }));
 
-      setSelection(
-        e.shiftKey
-          ? (prev) =>
-              prev.includes(layerId)
-                ? prev.filter((id) => id !== layerId)
-                : [...prev, layerId]
-          : [layerId],
-      );
-      setCanvasState({ mode: CanvasMode.Translating, current: coords });
+      let newSelection = selection;
+
+      // ✅ ONLY change selection if needed
+      if (!selection.includes(layerId)) {
+        newSelection = e.shiftKey ? [...selection, layerId] : [layerId];
+
+        setSelection(newSelection);
+      }
+      // pushing to main for actions
 
       const start = new Map();
-
       rectangleLayers.forEach((l) => {
-        if (selection.includes(l.id) || l.id === layerId) {
+        if (newSelection.includes(l.id)) {
           start.set(l.id, { x: l.layer.x, y: l.layer.y });
         }
       });
@@ -1094,12 +1188,8 @@ export default function Canvas({
 
       setCanvasState({ mode: CanvasMode.Translating, current: coords });
     },
-    [canvasState.mode, clientToWorld, rectangleLayers],
+    [canvasState.mode, clientToWorld, rectangleLayers, selection],
   );
-
-  useEffect(() => {
-    console.log(selection);
-  }, [selection]);
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -1113,7 +1203,7 @@ export default function Canvas({
         };
         const startState = dragStartlayersRef.current;
 
-        let firstMovedLayer: any = null;
+        let movedLayers: { id: string; x: number; y: number }[] = [];
 
         selection.forEach((id) => {
           const startPos = startState.get(id);
@@ -1122,7 +1212,7 @@ export default function Canvas({
           const newX = startPos.x + offset.x;
           const newY = startPos.y + offset.y;
 
-          if (!firstMovedLayer) firstMovedLayer = { id, x: newX, y: newY };
+          movedLayers.push({ id, x: newX, y: newY });
 
           const node = layerRefs.current.get(id);
           if (node) {
@@ -1139,19 +1229,16 @@ export default function Canvas({
 
         const now = Date.now();
         if (
-          firstMovedLayer &&
+          movedLayers.length > 0 &&
           now - lastSentMoveRef.current > 25 &&
           wsRef.current?.readyState === WebSocket.OPEN
         ) {
           lastSentMoveRef.current = now;
-          wsRef.current?.send(
+
+          wsRef.current.send(
             JSON.stringify({
               type: "LAYER_MOVE",
-              content: {
-                id: firstMovedLayer.id,
-                x: firstMovedLayer.x,
-                y: firstMovedLayer.y,
-              },
+              content: movedLayers,
               userId: user?.id,
             }),
           );
@@ -1790,6 +1877,15 @@ export default function Canvas({
           </g>
 
           <CursorPresence />
+
+          {canvasState.mode === CanvasMode.SelectionNet && (
+            <rect
+              ref={selectionNetRef}
+              fill="rgba(0,0,255,0.1)"
+              stroke="blue"
+              strokeDasharray="4"
+            />
+          )}
 
           {Object.entries(othersDraftLayers).map(([userId, draft]) => {
             if (!draft) return null;
